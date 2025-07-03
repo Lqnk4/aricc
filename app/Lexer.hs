@@ -1,9 +1,16 @@
-module Lexer where
+{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE RecordWildCards #-}
+
+module Lexer (
+    Token (..),
+    Lexer.lex,
+) where
 
 import Control.Monad
 import qualified Data.Char as Char
 import Data.Functor
 import Data.List
+import Data.Proxy
 import Data.Text (Text)
 import qualified Data.Text as T
 import Data.Void
@@ -11,7 +18,7 @@ import Text.Megaparsec hiding (Token)
 import Text.Megaparsec.Char
 import qualified Text.Megaparsec.Char.Lexer as L
 
-type Parser = Parsec Void Text
+type Lexer = Parsec Void Text
 
 data Token
     = OpenBrace
@@ -25,24 +32,27 @@ data Token
     | Identifier Text
     | IntLiteral Int
     | EOF
-    deriving (Eq, Show)
+    deriving (Eq, Ord, Show)
 
-sc :: Parser ()
+instance VisualStream [Token] where
+    showTokens Proxy = show
+
+sc :: Lexer ()
 sc = L.space space1 (L.skipLineComment "//") (L.skipBlockComment "/*" "*/")
 
-lexeme :: Parser a -> Parser a
+lexeme :: Lexer a -> Lexer a
 lexeme = L.lexeme sc
 
-lexEOF :: Parser Token
+lexEOF :: Lexer Token
 lexEOF = eof $> EOF
 
-lex :: Parser [Token]
+lex :: Lexer [Token]
 lex = sc *> go (pure [])
   where
-    go :: Parser [Token] -> Parser [Token]
+    go :: Lexer [Token] -> Lexer [Token]
     go tokensList = singleton <$> lexEOF <|> ((:) <$> lexeme lexToken <*> go tokensList)
 
-lexToken :: Parser Token
+lexToken :: Lexer Token
 lexToken =
     choice
         [ lexOpenBrace
@@ -61,32 +71,32 @@ lexToken =
 -- Tokens
 --
 
-lexOpenBrace :: Parser Token
+lexOpenBrace :: Lexer Token
 lexOpenBrace = single '{' $> OpenBrace
 
-lexCloseBrace :: Parser Token
+lexCloseBrace :: Lexer Token
 lexCloseBrace = single '}' $> CloseBrace
 
-lexOpenParen :: Parser Token
+lexOpenParen :: Lexer Token
 lexOpenParen = single '(' $> OpenParen
 
-lexCloseParen :: Parser Token
+lexCloseParen :: Lexer Token
 lexCloseParen = single ')' $> CloseParen
 
-lexSemicolon :: Parser Token
+lexSemicolon :: Lexer Token
 lexSemicolon = single ';' $> Semicolon
 
-lexIntKeyword :: Parser Token
+lexIntKeyword :: Lexer Token
 lexIntKeyword = chunk "int" $> IntKeyword
 
-lexCharKeyword :: Parser Token
+lexCharKeyword :: Lexer Token
 lexCharKeyword = chunk "char" $> CharKeyword
 
-lexReturnKeyword :: Parser Token
+lexReturnKeyword :: Lexer Token
 lexReturnKeyword = chunk "return" $> ReturnKeyword
 
 -- TODO: https://en.cppreference.com/w/c/language/identifiers.html
-lexIdentifier :: Parser Token
+lexIdentifier :: Lexer Token
 lexIdentifier =
     Identifier . T.pack
         <$> ((:) <$> firstChar <*> many (alphaNumChar <|> underscore <|> unicodeEscape))
@@ -101,7 +111,7 @@ lexIdentifier =
 
 -- TODO: Bounds checks?
 -- TODO: char as int literal
-lexIntLiteral :: Parser Token
+lexIntLiteral :: Lexer Token
 lexIntLiteral = IntLiteral <$> choice [hex, oct, bin, dec] <?> "Int Literal"
   where
     hex = try $ char '0' *> char' 'x' *> L.hexadecimal

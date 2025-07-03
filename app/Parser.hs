@@ -1,15 +1,49 @@
+{-# LANGUAGE LambdaCase #-}
+
 module Parser where
 
-data Program = Program FunctionDecl
+import Data.Set as Set
+import Data.Text (Text)
+import Data.Void
+import Lexer
+import Text.Megaparsec hiding (Token)
 
-data FunctionDecl = Function String Statement
+{- Week 1
+<program> ::= <function>
+<function> ::= "int" <id> "(" ")" "{" <statement> "}"
+<statement> ::= "return" <exp> ";"
+<exp> ::= <int>
+-}
 
-data Statement
-    = Return Expression
-    | Assign Variable Expression
+type Parser = Parsec Void [Token]
 
-data Expression = Constant Int
+newtype Prog = Prog FunDecl deriving (Show)
 
-data Variable = Variable String
+data FunDecl = Fun Text Statement deriving (Show)
 
+newtype Statement = Return Exp deriving (Show)
 
+newtype Exp = Const Int deriving (Show)
+
+parse :: Parser Prog
+parse = Prog <$> funDeclP
+
+funDeclP :: Parser FunDecl
+funDeclP =
+    Fun
+        <$> (single IntKeyword *> token testIdentifier Set.empty)
+        <*> (single OpenParen *> single CloseParen *> between (single OpenBrace) (single CloseBrace) statementP)
+  where
+    testIdentifier = \case
+        Identifier name -> Just name
+        _ -> Nothing
+
+statementP :: Parser Statement
+statementP = Return <$> (single ReturnKeyword *> expP <* single Semicolon)
+
+expP :: Parser Exp
+expP = Const <$> token testIntLiteral Set.empty
+  where
+    testIntLiteral = \case
+        IntLiteral x -> Just x
+        _ -> Nothing
