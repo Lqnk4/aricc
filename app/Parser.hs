@@ -1,4 +1,5 @@
 {-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE GADTs #-}
 
 module Parser where
 
@@ -17,7 +18,8 @@ import Text.Megaparsec hiding (Token)
 
 type Parser = Parsec Void [Token]
 
-newtype Prog = Prog FunDecl deriving (Show)
+newtype Prog where
+    Prog :: { getFunDecl :: FunDecl } -> Prog deriving (Show)
 
 data FunDecl = Fun Text Statement deriving (Show)
 
