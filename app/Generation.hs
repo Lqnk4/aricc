@@ -17,8 +17,8 @@ generateFunction (Fun name statement) = do
 
 generateStatement :: Statement -> Writer Text ()
 generateStatement (Return r) = do
-    _ <- tell . T.concat $ ["movq ", generateExpression r, ", ", "%rax", "\n"]
-    tell "ret\n"
+  _ <- tell . T.concat $ ["movq ", generateExpression r, ", ", "%rax", "\n"]
+  tell "ret\n"
 
 generateExpression :: Exp -> Text
 generateExpression (Const x) = '$' `T.cons` T.pack (show x)

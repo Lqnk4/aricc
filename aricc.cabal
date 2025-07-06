@@ -33,4 +33,8 @@ executable aricc
 
   hs-source-dirs: app
   default-language: Haskell2010
-  default-extensions: OverloadedStrings
+  default-extensions: OverloadedStrings,
+                      LambdaCase,
+                      TypeFamilies,
+                      RecordWildCards,
+                      GADTs

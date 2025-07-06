@@ -1,19 +1,31 @@
 module Main where
 
+import Control.Monad
 import Data.Either
 import qualified Data.Text.IO as T
+import Generation
 import Lexer
 import Parser
-import Generation
-import Text.Megaparsec (runParser)
+import System.Exit (exitFailure)
+import System.IO
+import Text.Megaparsec (errorBundlePretty, runParser)
 import Prelude hiding (lex)
 
 main :: IO ()
 main = do
-  let sourceFile = "test/return_2.c"
+  let sourceFile = "test/missing_semicolon.c"
   source <- T.readFile sourceFile
-  let tokens = fromRight [EOF] $ runParser lex sourceFile source
-      ast = fromRight undefined $ runParser parse sourceFile tokens
-      asm = generateASM ast
+  tokens <-
+    either
+      (\e -> hPutStrLn stderr (errorBundlePretty e) >> hPutStrLn stderr "[ERROR] exited with lexer failure" >> exitFailure)
+      pure
+      (runParser lex sourceFile source)
+  ast <-
+    either
+      (\e -> hPutStrLn stderr (errorBundlePretty e) >> hPutStrLn stderr "[ERROR] exited with parser failure" >> exitFailure)
+      pure
+      (runParser parse sourceFile $ TokenStream {tokenStreamInput = source, unTokenStream = tokens})
+  let asm = generateASM ast
   print asm
-  T.writeFile "test/return_2.s" asm
+  T.writeFile "test/missing_semicolon.s" asm
+  return ()
