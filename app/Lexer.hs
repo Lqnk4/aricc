@@ -117,14 +117,6 @@ instance TraversableStream TokenStream where
         }
     )
     where
-      (pre, post) = splitAt (o - pstateOffset) (unTokenStream pstateInput)
-      (preStr, postStr) = T.splitAt tokensConsumed (tokenStreamInput pstateInput)
-      preLine = T.reverse . T.takeWhile (/= '\n') . T.reverse $ preStr
-      tokensConsumed =
-        case NE.nonEmpty pre of
-          Nothing -> 0
-          Just nePre -> tokensLength pxy nePre
-      restOfLine = T.takeWhile (/= '\n') postStr
       prefix =
         if sameLine
           then pstateLinePrefix ++ T.unpack preLine
@@ -136,6 +128,15 @@ instance TraversableStream TokenStream where
             [] -> pstateSourcePos
             xs -> endPos (last xs)
           (x : _) -> startPos x
+      (pre, post) = splitAt (o - pstateOffset) (unTokenStream pstateInput)
+      -- NOTE: don't know how this works
+      (preStr, postStr) = T.splitAt (tokensConsumed + 1) (tokenStreamInput pstateInput)
+      preLine = T.reverse . T.takeWhile (/= '\n') . T.reverse $ preStr
+      tokensConsumed =
+        case NE.nonEmpty pre of
+          Nothing -> 0
+          Just nePre -> tokensLength pxy nePre
+      restOfLine = T.takeWhile (/= '\n') postStr
 
 liftCToken :: CToken -> LexerToken
 liftCToken t = WithPos {startPos = pos, endPos = pos, tokenLength = 0, tokenVal = t}
@@ -145,13 +146,10 @@ liftCToken t = WithPos {startPos = pos, endPos = pos, tokenLength = 0, tokenVal 
 liftCTokenP :: Lexer CToken -> Lexer LexerToken
 liftCTokenP lexer = do
   startPos <- getSourcePos
-  tokenVal <- lexer
+  (parsed, tokenVal) <- match lexer
   endPos <- getSourcePos
-  -- TODO: Fix error messages giving correct source position but wrong source line
-  let tokenLength = getColumn endPos - getColumn startPos
+  let tokenLength = T.length parsed
   return WithPos {..}
-  where
-    getColumn SourcePos {sourceColumn = col} = unPos col
 
 sc :: Lexer ()
 sc = L.space space1 (L.skipLineComment "//") (L.skipBlockComment "/*" "*/")
