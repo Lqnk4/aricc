@@ -18,6 +18,7 @@ import Data.Proxy
 import Data.Text (Text)
 import qualified Data.Text as T
 import Data.Void
+import Data.Word
 import Text.Megaparsec
 import Text.Megaparsec.Char
 import qualified Text.Megaparsec.Char.Lexer as L
@@ -34,7 +35,8 @@ data CToken
   | CharKeyword
   | ReturnKeyword
   | Identifier Text
-  | IntLiteral Int
+  | IntLiteral Word64
+  | BeginFile
   | EOF
   deriving (Eq, Ord, Show)
 
@@ -50,6 +52,7 @@ showCToken = \case
   ReturnKeyword -> "return"
   (Identifier name) -> name
   (IntLiteral n) -> T.pack (show n)
+  BeginFile -> "<Start>"
   EOF -> "<EOF>"
 
 data WithPos a = WithPos
@@ -151,8 +154,14 @@ liftCTokenP lexer = do
   let tokenLength = T.length parsed
   return WithPos {..}
 
+skipLineComment :: Lexer ()
+skipLineComment = L.skipLineComment "//"
+
+skipBlockComment :: Lexer ()
+skipBlockComment = L.skipBlockComment "/*" "*/"
+
 sc :: Lexer ()
-sc = L.space space1 (L.skipLineComment "//") (L.skipBlockComment "/*" "*/")
+sc = L.space space1 skipLineComment skipBlockComment
 
 lexeme :: Lexer a -> Lexer a
 lexeme = L.lexeme sc
@@ -166,11 +175,18 @@ keyword p = lexeme (try $ string p <* delimiter)
     -- allowed chars after a keyword
     delimiter = lookAhead (choice [void $ char ';', void spaceChar, eof])
 
+-- required for correct error offset handling in TokenStream
+lexBeginFile :: Lexer LexerToken
+lexBeginFile = liftCTokenP $ sc $> BeginFile
+
 lexEOF :: Lexer LexerToken
 lexEOF = liftCTokenP $ eof $> EOF
 
 lex :: Lexer [LexerToken]
-lex = sc *> go (pure [] :: Lexer [LexerToken])
+lex = do
+  beginFile <- lexBeginFile
+  result <- go (pure [] :: Lexer [LexerToken])
+  return $ beginFile : result
   where
     go tokensList = DL.singleton <$> lexEOF <|> ((:) <$> liftCTokenP lexToken <*> go tokensList)
     lexToken =
@@ -233,7 +249,6 @@ lexIdentifier =
     hexToInt = foldl ((+) . (16 *)) 0 . map Char.digitToInt
     firstChar = letterChar <|> underscore <|> unicodeEscape
 
--- TODO: Bounds checks?
 -- TODO: char as int literal
 lexIntLiteral :: Lexer CToken
 lexIntLiteral = lexeme (IntLiteral <$> choice [hex, oct, bin, dec] <?> "Int Literal")

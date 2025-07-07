@@ -1,6 +1,7 @@
 module Parser
   ( Parser.parse,
-    Prog (..),
+    prettyPrintAST,
+    Program (..),
     FunDecl (..),
     Statement (..),
     Exp (..),
@@ -9,7 +10,10 @@ where
 
 import qualified Data.Set as Set
 import Data.Text (Text)
+import qualified Data.Text as T
+import qualified Data.Text.IO as T
 import Data.Void
+import Data.Word
 import Lexer
 import Text.Megaparsec
 
@@ -22,18 +26,40 @@ import Text.Megaparsec
 
 type Parser = Parsec Void TokenStream
 
-newtype Prog where
-  Prog :: {getFunDecl :: FunDecl} -> Prog
+newtype Program where
+  Program :: {getFunDecl :: FunDecl} -> Program
   deriving (Show)
 
 data FunDecl = Fun Text Statement deriving (Show)
 
 newtype Statement = Return Exp deriving (Show)
 
-newtype Exp = Const Int deriving (Show)
+newtype Exp = Const Word64 deriving (Show)
 
-parse :: Parser Prog
-parse = Prog <$> funDeclP <* eofP
+prettyPrintAST :: Program -> IO ()
+prettyPrintAST prog = do
+  printProg 0 prog
+  where
+    indentWidth = 4
+    indentPrint n s = T.putStrLn $ T.replicate (indentWidth * n) " " <> s
+    (<+>) s1 s2 = s1 <> " " <> s2
+
+    printProg n program = printFunDecl n (getFunDecl program)
+
+    printFunDecl n (Fun name statement) = do
+      indentPrint n $ "FunDecl" <+> "INT" <+> name
+      indentPrint (n + 1) $ "params:" <+> "()"
+      indentPrint (n + 1) "body:"
+      printStatement (n + 2) statement
+
+    printStatement n (Return expr) = do
+      indentPrint n $ "RETURN" <+> showExp expr
+
+    showExp :: Exp -> Text
+    showExp (Const n) = "INT" <+> T.pack (show n)
+
+parse :: Parser Program
+parse = Program <$> (beginFileP *> funDeclP <* eofP)
 
 funDeclP :: Parser FunDecl
 funDeclP =
@@ -51,7 +77,7 @@ expP = Const <$> intP
 -- Token Primitives
 --
 
-intP :: Parser Int
+intP :: Parser Word64
 intP = token test Set.empty
   where
     test = \case
@@ -113,6 +139,12 @@ returnKeywordP = token test Set.empty
     test = \case
       (WithPos {tokenVal = ReturnKeyword}) -> Just ()
       _ -> Nothing
+
+beginFileP :: Parser ()
+beginFileP = token test Set.empty
+  where
+    test (WithPos _ _ _ BeginFile) = Just ()
+    test _ = Nothing
 
 eofP :: Parser ()
 eofP = token test Set.empty

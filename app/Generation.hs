@@ -1,11 +1,14 @@
-module Generation where
+module Generation
+  ( generateASM,
+  )
+where
 
 import Control.Monad.Writer.Lazy
 import Data.Text (Text)
 import qualified Data.Text as T
 import Parser
 
-generateASM :: Prog -> Text
+generateASM :: Program -> Text
 generateASM prog = execWriter $ do
   generateFunction (getFunDecl prog)
 

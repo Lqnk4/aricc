@@ -1,5 +1,6 @@
 module Main where
 
+import System.FilePath
 import Control.Monad
 import Data.Either
 import qualified Data.Text.IO as T
@@ -25,7 +26,7 @@ main = do
       (\e -> hPutStrLn stderr (errorBundlePretty e) >> hPutStrLn stderr "[ERROR] exited with parser failure" >> exitFailure)
       pure
       (runParser parse sourceFile $ TokenStream {tokenStreamInput = source, unTokenStream = tokens})
+  prettyPrintAST ast
   let asm = generateASM ast
-  print asm
-  T.writeFile "test/missing_semicolon.s" asm
+  T.writeFile (replaceExtension sourceFile "s") asm
   return ()
