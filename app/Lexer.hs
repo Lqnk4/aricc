@@ -3,7 +3,6 @@ module Lexer
     WithPos (..),
     TokenStream (..),
     Lexer.lex,
-    liftCToken,
     liftCTokenP,
   )
 where
@@ -36,6 +35,9 @@ data CToken
   | ReturnKeyword
   | Identifier Text
   | IntLiteral Word64
+  | Negation
+  | BitwiseComplement
+  | LogicalNegation
   | BeginFile
   | EOF
   deriving (Eq, Ord, Show)
@@ -52,6 +54,9 @@ showCToken = \case
   ReturnKeyword -> "return"
   (Identifier name) -> name
   (IntLiteral n) -> T.pack (show n)
+  Negation -> "-"
+  BitwiseComplement -> "~"
+  LogicalNegation -> "!"
   BeginFile -> "<Start>"
   EOF -> "<EOF>"
 
@@ -141,11 +146,6 @@ instance TraversableStream TokenStream where
           Just nePre -> tokensLength pxy nePre
       restOfLine = T.takeWhile (/= '\n') postStr
 
-liftCToken :: CToken -> LexerToken
-liftCToken t = WithPos {startPos = pos, endPos = pos, tokenLength = 0, tokenVal = t}
-  where
-    pos = initialPos ""
-
 liftCTokenP :: Lexer CToken -> Lexer LexerToken
 liftCTokenP lexer = do
   startPos <- getSourcePos
@@ -154,14 +154,8 @@ liftCTokenP lexer = do
   let tokenLength = T.length parsed
   return WithPos {..}
 
-skipLineComment :: Lexer ()
-skipLineComment = L.skipLineComment "//"
-
-skipBlockComment :: Lexer ()
-skipBlockComment = L.skipBlockComment "/*" "*/"
-
 sc :: Lexer ()
-sc = L.space space1 skipLineComment skipBlockComment
+sc = L.space space1 (L.skipLineComment "//") (L.skipBlockComment "/*" "*/")
 
 lexeme :: Lexer a -> Lexer a
 lexeme = L.lexeme sc
@@ -200,7 +194,8 @@ lex = do
           lexCharKeyword,
           lexReturnKeyword,
           lexIdentifier,
-          lexIntLiteral
+          lexIntLiteral,
+          lexNegation
         ]
 
 --
@@ -257,3 +252,6 @@ lexIntLiteral = lexeme (IntLiteral <$> choice [hex, oct, bin, dec] <?> "Int Lite
     oct = try $ char '0' *> char' 'o' *> L.octal
     bin = try $ char '0' *> char' 'b' *> L.binary
     dec = try L.decimal
+
+lexNegation :: Lexer CToken
+lexNegation = lexeme $ char '-' $> Negation

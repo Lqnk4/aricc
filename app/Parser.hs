@@ -5,6 +5,7 @@ module Parser
     FunDecl (..),
     Statement (..),
     Exp (..),
+    UnaryOp(..),
   )
 where
 
@@ -17,11 +18,12 @@ import Data.Word
 import Lexer
 import Text.Megaparsec
 
-{- Week 1
+{- Week 2
 <program> ::= <function>
 <function> ::= "int" <id> "(" ")" "{" <statement> "}"
 <statement> ::= "return" <exp> ";"
-<exp> ::= <int>
+<exp> ::= <unary_op> <exp> | <int>
+<unary_op> ::= "!" | "~" | "-"
 -}
 
 type Parser = Parsec Void TokenStream
@@ -34,7 +36,12 @@ data FunDecl = Fun Text Statement deriving (Show)
 
 newtype Statement = Return Exp deriving (Show)
 
-newtype Exp = Const Word64 deriving (Show)
+data Exp
+  = Const Word64
+  | UnaryOpExp UnaryOp Exp
+  deriving (Show)
+
+data UnaryOp = NegationOp deriving (Show)
 
 prettyPrintAST :: Program -> IO ()
 prettyPrintAST prog = do
@@ -57,6 +64,10 @@ prettyPrintAST prog = do
 
     showExp :: Exp -> Text
     showExp (Const n) = "INT" <+> T.pack (show n)
+    showExp (UnaryOpExp unaryOp newExp) = showUnaryOp unaryOp <+> showExp newExp
+
+    showUnaryOp :: UnaryOp -> Text
+    showUnaryOp NegationOp = "NEGATE"
 
 parse :: Parser Program
 parse = Program <$> (beginFileP *> funDeclP <* eofP)
@@ -72,6 +83,7 @@ statementP = Return <$> (returnKeywordP *> expP <* semicolonP)
 
 expP :: Parser Exp
 expP = Const <$> intP
+  <|> UnaryOpExp <$> unaryOpP <*> expP
 
 --
 -- Token Primitives
@@ -139,6 +151,12 @@ returnKeywordP = token test Set.empty
     test = \case
       (WithPos {tokenVal = ReturnKeyword}) -> Just ()
       _ -> Nothing
+
+unaryOpP :: Parser UnaryOp
+unaryOpP = token test Set.empty
+  where
+    test (WithPos _ _ _ Negation) = Just NegationOp
+    test _ = Nothing
 
 beginFileP :: Parser ()
 beginFileP = token test Set.empty
