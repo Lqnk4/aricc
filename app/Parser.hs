@@ -5,7 +5,7 @@ module Parser
     FunDecl (..),
     Statement (..),
     Exp (..),
-    UnaryOp(..),
+    UnaryOp (..),
   )
 where
 
@@ -41,7 +41,11 @@ data Exp
   | UnaryOpExp UnaryOp Exp
   deriving (Show)
 
-data UnaryOp = NegationOp deriving (Show)
+data UnaryOp
+  = NegationOp
+  | BitwiseComplementOp
+  | LogicalNegationOp
+  deriving (Show)
 
 prettyPrintAST :: Program -> IO ()
 prettyPrintAST prog = do
@@ -64,10 +68,12 @@ prettyPrintAST prog = do
 
     showExp :: Exp -> Text
     showExp (Const n) = "INT" <+> T.pack (show n)
-    showExp (UnaryOpExp unaryOp newExp) = showUnaryOp unaryOp <+> showExp newExp
+    showExp (UnaryOpExp unaryOp newExp) = showUnaryOp unaryOp <+> "(" <> showExp newExp <> ")"
 
     showUnaryOp :: UnaryOp -> Text
-    showUnaryOp NegationOp = "NEGATE"
+    showUnaryOp NegationOp = "-"
+    showUnaryOp BitwiseComplementOp = "~"
+    showUnaryOp LogicalNegationOp = "!"
 
 parse :: Parser Program
 parse = Program <$> (beginFileP *> funDeclP <* eofP)
@@ -82,8 +88,9 @@ statementP :: Parser Statement
 statementP = Return <$> (returnKeywordP *> expP <* semicolonP)
 
 expP :: Parser Exp
-expP = Const <$> intP
-  <|> UnaryOpExp <$> unaryOpP <*> expP
+expP =
+  (Const <$> intP)
+    <|> (UnaryOpExp <$> unaryOpP <*> expP)
 
 --
 -- Token Primitives
@@ -156,6 +163,8 @@ unaryOpP :: Parser UnaryOp
 unaryOpP = token test Set.empty
   where
     test (WithPos _ _ _ Negation) = Just NegationOp
+    test (WithPos _ _ _ BitwiseComplement) = Just BitwiseComplementOp
+    test (WithPos _ _ _ LogicalNegation) = Just LogicalNegationOp
     test _ = Nothing
 
 beginFileP :: Parser ()

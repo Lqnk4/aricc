@@ -195,7 +195,9 @@ lex = do
           lexReturnKeyword,
           lexIdentifier,
           lexIntLiteral,
-          lexNegation
+          lexNegation,
+          lexBitwiseComplement,
+          lexLogicalNegation
         ]
 
 --
@@ -255,3 +257,9 @@ lexIntLiteral = lexeme (IntLiteral <$> choice [hex, oct, bin, dec] <?> "Int Lite
 
 lexNegation :: Lexer CToken
 lexNegation = lexeme $ char '-' $> Negation
+
+lexBitwiseComplement :: Lexer CToken
+lexBitwiseComplement = lexeme $ char '~' $> BitwiseComplement
+
+lexLogicalNegation :: Lexer CToken
+lexLogicalNegation = lexeme $ char '!' $> LogicalNegation
