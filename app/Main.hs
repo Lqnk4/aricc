@@ -27,7 +27,7 @@ main = do
       (\e -> hPutStrLn stderr (errorBundlePretty e) >> hPutStrLn stderr "[ERROR] exited with parser failure" >> exitFailure)
       pure
       (runParser parse inFile $ TokenStream {tokenStreamInput = source, unTokenStream = tokens})
-  -- prettyPrintAST ast
+  prettyPrintAST ast
   let asm = generateASM ast
   writeFile (replaceExtension inFile "s") asm
   return ()

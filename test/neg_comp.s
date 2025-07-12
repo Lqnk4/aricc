@@ -1,9 +1,9 @@
 .globl main
 main:
-	movq $1, %rax
-	cmp $0, %rax
-	movq $0, %rax
+	movl $1, %eax
+	cmp $0, %eax
+	movl $0, %eax
 	sete %al
-	not %rax
-	neg %rax
+	not %eax
+	neg %eax
 	ret

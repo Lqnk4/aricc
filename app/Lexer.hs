@@ -1,6 +1,7 @@
 module Lexer
   ( CToken (..),
     WithPos (..),
+    LexerToken,
     TokenStream (..),
     Lexer.lex,
     liftCTokenP,
@@ -34,10 +35,13 @@ data CToken
   | CharKeyword
   | ReturnKeyword
   | Identifier Text
-  | IntLiteral Word64
-  | Negation
+  | IntLiteral Word32
+  | Minus
   | BitwiseComplement
   | LogicalNegation
+  | Addition
+  | Multiplication
+  | Division
   | BeginFile
   | EOF
   deriving (Eq, Ord, Show)
@@ -54,9 +58,12 @@ showCToken = \case
   ReturnKeyword -> "return"
   (Identifier name) -> name
   (IntLiteral n) -> T.pack (show n)
-  Negation -> "-"
+  Minus -> "-"
   BitwiseComplement -> "~"
   LogicalNegation -> "!"
+  Addition -> "+"
+  Multiplication -> "*"
+  Division -> "/"
   BeginFile -> "<Start>"
   EOF -> "<EOF>"
 
@@ -74,6 +81,7 @@ data TokenStream = TokenStream
   { tokenStreamInput :: Text,
     unTokenStream :: [LexerToken]
   }
+  deriving (Show)
 
 pxy :: Proxy TokenStream
 pxy = Proxy
@@ -195,13 +203,16 @@ lex = do
           lexReturnKeyword,
           lexIdentifier,
           lexIntLiteral,
-          lexNegation,
+          lexMinus,
           lexBitwiseComplement,
-          lexLogicalNegation
+          lexLogicalNegation,
+          lexAddition,
+          lexMultiplication,
+          lexDivision
         ]
 
 --
--- Tokens
+-- Lexer Primitives
 --
 
 lexOpenBrace :: Lexer CToken
@@ -255,11 +266,20 @@ lexIntLiteral = lexeme (IntLiteral <$> choice [hex, oct, bin, dec] <?> "Int Lite
     bin = try $ char '0' *> char' 'b' *> L.binary
     dec = try L.decimal
 
-lexNegation :: Lexer CToken
-lexNegation = lexeme $ char '-' $> Negation
+lexMinus :: Lexer CToken
+lexMinus = symbol "-" $> Minus
 
 lexBitwiseComplement :: Lexer CToken
-lexBitwiseComplement = lexeme $ char '~' $> BitwiseComplement
+lexBitwiseComplement = symbol "~" $> BitwiseComplement
 
 lexLogicalNegation :: Lexer CToken
-lexLogicalNegation = lexeme $ char '!' $> LogicalNegation
+lexLogicalNegation = symbol "!" $> LogicalNegation
+
+lexAddition :: Lexer CToken
+lexAddition = symbol "+" $> Addition
+
+lexMultiplication :: Lexer CToken
+lexMultiplication = symbol "*" $> Multiplication
+
+lexDivision :: Lexer CToken
+lexDivision = symbol "/" $> Division

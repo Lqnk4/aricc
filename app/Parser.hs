@@ -5,6 +5,10 @@ module Parser
     FunDecl (..),
     Statement (..),
     Exp (..),
+    Term (..),
+    TermOp (..),
+    Factor (..),
+    FactorOp (..),
     UnaryOp (..),
   )
 where
@@ -18,12 +22,13 @@ import Data.Word
 import Lexer
 import Text.Megaparsec
 
-{- Week 2
+{- Week 3
 <program> ::= <function>
 <function> ::= "int" <id> "(" ")" "{" <statement> "}"
 <statement> ::= "return" <exp> ";"
-<exp> ::= <unary_op> <exp> | <int>
-<unary_op> ::= "!" | "~" | "-"
+<exp> ::= <term> { ("+" | "-") <term> }
+<term> ::= <factor> { ("*" | "/") <factor> }
+<factor> ::= "(" <exp> ")" | <unary_op> <factor> | <int>
 -}
 
 type Parser = Parsec Void TokenStream
@@ -36,17 +41,33 @@ data FunDecl = Fun Text Statement deriving (Show)
 
 newtype Statement = Return Exp deriving (Show)
 
-data Exp
-  = Const Word64
-  | UnaryOpExp UnaryOp Exp
-  deriving (Show)
+data Exp = Exp Term [(TermOp, Term)] deriving (Show, Eq)
+
+data Term = Term Factor [(FactorOp, Factor)] deriving (Show, Eq)
+
+data Factor
+  = Parens Exp
+  | UnaryFactor UnaryOp Factor
+  | Const Word32
+  deriving (Show, Eq)
 
 data UnaryOp
   = NegationOp
   | BitwiseComplementOp
   | LogicalNegationOp
-  deriving (Show)
+  deriving (Show, Eq)
 
+data TermOp
+  = AdditionOp
+  | SubtractionOp
+  deriving (Show, Eq)
+
+data FactorOp
+  = MultiplicationOp
+  | DivisionOp
+  deriving (Show, Eq)
+
+-- TODO: use show instances instead
 prettyPrintAST :: Program -> IO ()
 prettyPrintAST prog = do
   printProg 0 prog
@@ -64,16 +85,7 @@ prettyPrintAST prog = do
       printStatement (n + 2) statement
 
     printStatement n (Return expr) = do
-      indentPrint n $ "RETURN" <+> showExp expr
-
-    showExp :: Exp -> Text
-    showExp (Const n) = "INT" <+> T.pack (show n)
-    showExp (UnaryOpExp unaryOp newExp) = showUnaryOp unaryOp <+> "(" <> showExp newExp <> ")"
-
-    showUnaryOp :: UnaryOp -> Text
-    showUnaryOp NegationOp = "-"
-    showUnaryOp BitwiseComplementOp = "~"
-    showUnaryOp LogicalNegationOp = "!"
+      indentPrint n $ "RETURN" <+> T.pack (show expr)
 
 parse :: Parser Program
 parse = Program <$> (beginFileP *> funDeclP <* eofP)
@@ -87,16 +99,41 @@ funDeclP =
 statementP :: Parser Statement
 statementP = Return <$> (returnKeywordP *> expP <* semicolonP)
 
+-- TODO: test expP and termP
 expP :: Parser Exp
-expP =
-  (Const <$> intP)
-    <|> (UnaryOpExp <$> unaryOpP <*> expP)
+expP = Exp <$> termP <*> go []
+  where
+    go es =
+      try (do
+          result <- (,) <$> termOpP <*> termP
+          go (result : es))
+        <|> pure es
+
+termP :: Parser Term
+termP = Term <$> factorP <*> go []
+  where
+    go fs =
+      try ( do
+          result <- (,) <$> factorOpP <*> factorP
+          go (result : fs)
+      )
+        <|> pure fs
+
+factorP :: Parser Factor
+factorP =
+  Parens
+    <$> between openParenP closeParenP expP
+      <|> UnaryFactor
+    <$> unaryOpP
+    <*> factorP
+      <|> Const
+    <$> intP
 
 --
 -- Token Primitives
 --
 
-intP :: Parser Word64
+intP :: Parser Word32
 intP = token test Set.empty
   where
     test = \case
@@ -162,9 +199,23 @@ returnKeywordP = token test Set.empty
 unaryOpP :: Parser UnaryOp
 unaryOpP = token test Set.empty
   where
-    test (WithPos _ _ _ Negation) = Just NegationOp
+    test (WithPos _ _ _ Minus) = Just NegationOp
     test (WithPos _ _ _ BitwiseComplement) = Just BitwiseComplementOp
     test (WithPos _ _ _ LogicalNegation) = Just LogicalNegationOp
+    test _ = Nothing
+
+termOpP :: Parser TermOp
+termOpP = token test Set.empty
+  where
+    test (WithPos _ _ _ Addition) = Just AdditionOp
+    test (WithPos _ _ _ Minus) = Just SubtractionOp
+    test _ = Nothing
+
+factorOpP :: Parser FactorOp
+factorOpP = token test Set.empty
+  where
+    test (WithPos _ _ _ Multiplication) = Just MultiplicationOp
+    test (WithPos _ _ _ Division) = Just DivisionOp
     test _ = Nothing
 
 beginFileP :: Parser ()
