@@ -183,10 +183,10 @@ generateExpression :: Exp -> Writer [Instruction] ()
 generateExpression (Exp t []) = generateTerm t
 generateExpression (Exp t ts) = do
   generateTerm t
-  tellInstr $ PUSH RAX
   forM_
     ts
     ( \(tOp, t') -> do
+        tellInstr $ PUSH RAX
         generateTerm t'
         case tOp of
           AdditionOp -> do
@@ -204,10 +204,10 @@ generateTerm :: Term -> Writer [Instruction] ()
 generateTerm (Term f []) = generateFactor f
 generateTerm (Term f fs) = do
   generateFactor f
-  tellInstr $ PUSH RAX
   forM_
     fs
     ( \(fOp, f') -> do
+        tellInstr $ PUSH RAX
         generateFactor f'
         case fOp of
           MultiplicationOp -> do

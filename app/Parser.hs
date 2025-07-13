@@ -99,7 +99,7 @@ funDeclP =
 statementP :: Parser Statement
 statementP = Return <$> (returnKeywordP *> expP <* semicolonP)
 
--- TODO: test expP and termP
+-- TODO: avoid call to reverse in expP and termP termination call
 expP :: Parser Exp
 expP = Exp <$> termP <*> go []
   where
@@ -107,7 +107,7 @@ expP = Exp <$> termP <*> go []
       try (do
           result <- (,) <$> termOpP <*> termP
           go (result : es))
-        <|> pure es
+        <|> pure (reverse es)
 
 termP :: Parser Term
 termP = Term <$> factorP <*> go []
@@ -117,7 +117,7 @@ termP = Term <$> factorP <*> go []
           result <- (,) <$> factorOpP <*> factorP
           go (result : fs)
       )
-        <|> pure fs
+        <|> pure (reverse fs)
 
 factorP :: Parser Factor
 factorP =
