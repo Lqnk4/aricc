@@ -11,7 +11,7 @@ import qualified Data.Text as T
 import Data.Word
 import Parser
 
--- | GNU asm instructions
+-- | GNU asm instructions (AT&T syntax)
 data Instruction where
   MOVL :: Arg32 -> Arg32 -> Instruction
   MOVQ :: Arg64 -> Arg64 -> Instruction
@@ -30,7 +30,13 @@ data Instruction where
   NEG :: (Arg a) => a -> Instruction
   NOT :: (Arg a) => a -> Instruction
   CMP :: (Arg a1, Arg a2) => a2 -> a1 -> Instruction
+  -- TODO: Give labels their own type and update type signatures accordingly
+  -- Also add a conversion labelToInstr :: Label -> Instruction
+  JMP :: Text -> Instruction
+  JE :: Text -> Instruction
+  JNE :: Text -> Instruction
   SETE :: Arg8 -> Instruction
+  SETNE :: Arg8 -> Instruction
   SETL :: Arg8 -> Instruction
   SETLE :: Arg8 -> Instruction
   SETG :: Arg8 -> Instruction
@@ -63,7 +69,11 @@ instance Show Instruction where
         NEG arg1 -> ["neg", show arg1]
         NOT arg1 -> ["not", show arg1]
         CMP arg1 arg2 -> ["cmp", show arg1 ++ ",", show arg2]
+        JMP label -> ["jmp", show label]
+        JE label -> ["je", show label]
+        JNE label -> ["je", show label]
         SETE arg1 -> ["sete", show arg1]
+        SETNE arg1 -> ["setne", show arg1]
         SETL arg1 -> ["setl", show arg1]
         SETLE arg1 -> ["setle", show arg1]
         SETG arg1 -> ["setg", show arg1]
@@ -176,11 +186,52 @@ generateExp (Exp l ls) = undefined
 
 generateLogicalAndExp :: LogicalAndExp -> Writer [Instruction] ()
 generateLogicalAndExp (LogicalAndExp e []) = generateEqualityExp e
-generateLogicalAndExp (LogicalAndExp e es) = undefined
+generateLocalAndExp _ = undefined
+{-generateLogicalAndExp (LogicalAndExp e es) = do
+  generateEqualityExp e
+  forM_
+    es
+    ( \(eOp, e') -> do
+      case eOp of
+        AndOp -> do
+          -- TODO: function to generate unique arbitrary labels
+          let clauseLabel = generateLabelText "andclause"
+          let endLabel = generateLabelText "endclause"
+          tell
+            [ CMP (DWORD 0) EAX
+            , JNE clauseLabel
+            , JMP endLabel
+            , Label clauseLabel
+            ]
+          generateEqualityExp e'
+          tell
+            [ CMP (DWORD 0) EAX
+            , MOVQ (QWORD 0) RAX
+            , SETNE AL
+            ]
+    )
+-}
 
 generateEqualityExp :: EqualityExp -> Writer [Instruction] ()
 generateEqualityExp (EqualityExp r []) = generateRelationalExp r
-generateEqualityExp (EqualityExp r rs) = undefined
+generateEqualityExp (EqualityExp r rs) = do
+  generateRelationalExp r
+  forM_
+    rs
+    ( \(rOp, r') -> do
+      tellInstr $ PUSH RAX
+      generateRelationalExp r'
+      tell
+        [ POP RCX
+        , CMP EAX ECX
+        , MOVQ (QWORD 0) RAX
+        ]
+      case rOp of
+        NotEqualOp -> do
+          tellInstr $ SETE AL
+        EqualOp -> do
+          tellInstr $ SETNE AL
+    )
 
 generateRelationalExp :: RelationalExp -> Writer [Instruction] ()
 generateRelationalExp (RelationalExp a []) = generateAdditiveExp a
