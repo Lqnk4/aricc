@@ -220,8 +220,6 @@ lex = do
           lexIdentifier,
           lexIntLiteral,
           lexMinus,
-          lexBitwiseComplement,
-          lexLogicalNegation,
           lexAddition,
           lexMultiplication,
           lexDivision,
@@ -232,7 +230,9 @@ lex = do
           lexLessThanEq,
           lexLessThan,
           lexGreaterThanEq,
-          lexGreaterThan
+          lexGreaterThan,
+          lexBitwiseComplement,
+          lexLogicalNegation
         ]
 
 --

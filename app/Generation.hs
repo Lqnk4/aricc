@@ -4,12 +4,17 @@ module Generation
 where
 
 import Control.Monad
+import Control.Monad.State
 import Control.Monad.Writer.Lazy
 import Data.Int
 import Data.Text (Text)
 import qualified Data.Text as T
 import Data.Word
 import Parser
+
+newtype GeneratorState = GeneratorState {gsLabelCounter :: Int}
+
+type Generator a = StateT GeneratorState (Writer [Instruction]) a
 
 -- | GNU asm instructions (AT&T syntax)
 data Instruction where
@@ -30,8 +35,6 @@ data Instruction where
   NEG :: (Arg a) => a -> Instruction
   NOT :: (Arg a) => a -> Instruction
   CMP :: (Arg a1, Arg a2) => a2 -> a1 -> Instruction
-  -- TODO: Give labels their own type and update type signatures accordingly
-  -- Also add a conversion labelToInstr :: Label -> Instruction
   JMP :: Text -> Instruction
   JE :: Text -> Instruction
   JNE :: Text -> Instruction
@@ -71,7 +74,7 @@ instance Show Instruction where
         CMP arg1 arg2 -> ["cmp", show arg1 ++ ",", show arg2]
         JMP label -> ["jmp", show label]
         JE label -> ["je", show label]
-        JNE label -> ["je", show label]
+        JNE label -> ["jne", show label]
         SETE arg1 -> ["sete", show arg1]
         SETNE arg1 -> ["setne", show arg1]
         SETL arg1 -> ["setl", show arg1]
@@ -164,10 +167,12 @@ instance Show Arg8 where
 instance Arg Arg8
 
 generateASM :: Program -> String
-generateASM prog = concatMap show . execWriter $ do
+generateASM prog = concatMap show . execWriter . flip evalStateT initialGenState $ do
   generateFunction (getFunDecl prog)
+  where
+    initialGenState = GeneratorState {gsLabelCounter = 0}
 
-generateFunction :: FunDecl -> Writer [Instruction] ()
+generateFunction :: FunDecl -> Generator ()
 generateFunction (Fun name statement) = do
   tell
     [ Globl name,
@@ -175,65 +180,86 @@ generateFunction (Fun name statement) = do
     ]
   generateStatement statement
 
-generateStatement :: Statement -> Writer [Instruction] ()
+generateStatement :: Statement -> Generator ()
 generateStatement (Return r) = do
   generateExp r
   tellInstr RET
 
-generateExp :: Exp -> Writer [Instruction] ()
+generateExp :: Exp -> Generator ()
 generateExp (Exp l []) = generateLogicalAndExp l
-generateExp (Exp l ls) = undefined
+generateExp (Exp l ls) = do
+  generateLogicalAndExp l
+  forM_
+    ls
+    ( \(lOp, l') -> do
+      case lOp of
+        OrOp -> do
+          clauseLabel <- uniqueLabel "orclause"
+          endLabel <- uniqueLabel "end"
+          tell
+            [ CMP (DWORD 0) EAX,
+              JE clauseLabel,
+              MOVL (DWORD 1) EAX,
+              JMP endLabel,
+              Label clauseLabel
+            ]
+          generateLogicalAndExp l'
+          tell
+            [ CMP (DWORD 0) EAX,
+              MOVQ (QWORD 0) RAX,
+              SETNE AL,
+              Label endLabel
+            ]
+    )
 
-generateLogicalAndExp :: LogicalAndExp -> Writer [Instruction] ()
+generateLogicalAndExp :: LogicalAndExp -> Generator ()
 generateLogicalAndExp (LogicalAndExp e []) = generateEqualityExp e
-generateLocalAndExp _ = undefined
-{-generateLogicalAndExp (LogicalAndExp e es) = do
+generateLogicalAndExp (LogicalAndExp e es) = do
   generateEqualityExp e
   forM_
     es
     ( \(eOp, e') -> do
-      case eOp of
-        AndOp -> do
-          -- TODO: function to generate unique arbitrary labels
-          let clauseLabel = generateLabelText "andclause"
-          let endLabel = generateLabelText "endclause"
-          tell
-            [ CMP (DWORD 0) EAX
-            , JNE clauseLabel
-            , JMP endLabel
-            , Label clauseLabel
-            ]
-          generateEqualityExp e'
-          tell
-            [ CMP (DWORD 0) EAX
-            , MOVQ (QWORD 0) RAX
-            , SETNE AL
-            ]
+        case eOp of
+          AndOp -> do
+            clauseLabel <-  uniqueLabel "andclause"
+            endLabel <-  uniqueLabel "end"
+            tell
+              [ CMP (DWORD 0) EAX,
+                JNE clauseLabel,
+                JMP endLabel,
+                Label clauseLabel
+              ]
+            generateEqualityExp e'
+            tell
+              [ CMP (DWORD 0) EAX,
+                MOVQ (QWORD 0) RAX,
+                SETNE AL,
+                Label endLabel
+              ]
     )
--}
 
-generateEqualityExp :: EqualityExp -> Writer [Instruction] ()
+generateEqualityExp :: EqualityExp -> Generator ()
 generateEqualityExp (EqualityExp r []) = generateRelationalExp r
 generateEqualityExp (EqualityExp r rs) = do
   generateRelationalExp r
   forM_
     rs
     ( \(rOp, r') -> do
-      tellInstr $ PUSH RAX
-      generateRelationalExp r'
-      tell
-        [ POP RCX
-        , CMP EAX ECX
-        , MOVQ (QWORD 0) RAX
-        ]
-      case rOp of
-        NotEqualOp -> do
-          tellInstr $ SETE AL
-        EqualOp -> do
-          tellInstr $ SETNE AL
+        tellInstr $ PUSH RAX
+        generateRelationalExp r'
+        tell
+          [ POP RCX,
+            CMP EAX ECX,
+            MOVQ (QWORD 0) RAX
+          ]
+        case rOp of
+          NotEqualOp -> do
+            tellInstr $ SETNE AL
+          EqualOp -> do
+            tellInstr $ SETE AL
     )
 
-generateRelationalExp :: RelationalExp -> Writer [Instruction] ()
+generateRelationalExp :: RelationalExp -> Generator ()
 generateRelationalExp (RelationalExp a []) = generateAdditiveExp a
 generateRelationalExp (RelationalExp a as) = do
   generateAdditiveExp a
@@ -243,9 +269,9 @@ generateRelationalExp (RelationalExp a as) = do
         tellInstr $ PUSH RAX
         generateAdditiveExp a'
         tell
-          [ POP RCX
-          , CMP EAX ECX
-          , MOVQ (QWORD 0) RAX
+          [ POP RCX,
+            CMP EAX ECX,
+            MOVQ (QWORD 0) RAX
           ]
         case aOp of
           LessThanOp -> do
@@ -258,7 +284,7 @@ generateRelationalExp (RelationalExp a as) = do
             tellInstr $ SETGE AL
     )
 
-generateAdditiveExp :: AdditiveExp -> Writer [Instruction] ()
+generateAdditiveExp :: AdditiveExp -> Generator ()
 generateAdditiveExp (AdditiveExp t []) = generateTerm t
 generateAdditiveExp (AdditiveExp t ts) = do
   generateTerm t
@@ -279,7 +305,7 @@ generateAdditiveExp (AdditiveExp t ts) = do
               ]
     )
 
-generateTerm :: Term -> Writer [Instruction] ()
+generateTerm :: Term -> Generator ()
 generateTerm (Term f []) = generateFactor f
 generateTerm (Term f fs) = do
   generateFactor f
@@ -301,7 +327,7 @@ generateTerm (Term f fs) = do
               ]
     )
 
-generateFactor :: Factor -> Writer [Instruction] ()
+generateFactor :: Factor -> Generator ()
 generateFactor (Const n) = tellInstr $ MOVL (DWORD n) EAX
 generateFactor (UnaryFactor op f) = do
   generateFactor f
@@ -318,5 +344,14 @@ generateFactor (UnaryFactor op f) = do
         ]
 generateFactor (Parens expr) = generateExp expr
 
-tellInstr :: Instruction -> Writer [Instruction] ()
+tellInstr :: Instruction -> Generator ()
 tellInstr = tell . pure
+
+-- | Supplies a unique label prepended with the arguement label name
+uniqueLabel :: Text -> Generator Text
+uniqueLabel labelName = do
+  genState <- get
+  let labelCounter = gsLabelCounter genState
+  put (genState{gsLabelCounter = succ labelCounter})
+  return $ "_" <> labelName <> T.pack (show labelCounter)
+
