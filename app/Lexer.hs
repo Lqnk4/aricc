@@ -41,6 +41,14 @@ data CToken
   | LogicalNegation
   | Addition
   | Multiplication
+  | And
+  | Or
+  | Equal
+  | NotEqual
+  | LessThan
+  | LessThanEq
+  | GreaterThan
+  | GreaterThanEq
   | Division
   | BeginFile
   | EOF
@@ -64,6 +72,14 @@ showCToken = \case
   Addition -> "+"
   Multiplication -> "*"
   Division -> "/"
+  And -> "&&"
+  Or -> "||"
+  Equal -> "=="
+  NotEqual -> "!="
+  LessThan -> "<"
+  LessThanEq -> "<="
+  GreaterThan -> ">"
+  GreaterThanEq -> ">="
   BeginFile -> "<Start>"
   EOF -> "<EOF>"
 
@@ -208,7 +224,15 @@ lex = do
           lexLogicalNegation,
           lexAddition,
           lexMultiplication,
-          lexDivision
+          lexDivision,
+          lexAnd,
+          lexOr,
+          lexEqual,
+          lexNotEqual,
+          lexLessThanEq,
+          lexLessThan,
+          lexGreaterThanEq,
+          lexGreaterThan
         ]
 
 --
@@ -283,3 +307,28 @@ lexMultiplication = symbol "*" $> Multiplication
 
 lexDivision :: Lexer CToken
 lexDivision = symbol "/" $> Division
+
+lexAnd :: Lexer CToken
+lexAnd = symbol "&&" $> And
+
+lexOr :: Lexer CToken
+lexOr = symbol "||" $> Or
+
+lexEqual :: Lexer CToken
+lexEqual = symbol "==" $> Equal
+
+lexNotEqual :: Lexer CToken
+lexNotEqual = symbol "!=" $> NotEqual
+
+lexLessThan :: Lexer CToken
+lexLessThan = symbol "<" $> LessThan
+
+lexLessThanEq :: Lexer CToken
+lexLessThanEq = symbol "<=" $> LessThanEq
+
+lexGreaterThan :: Lexer CToken
+lexGreaterThan = symbol ">" $> GreaterThan
+
+lexGreaterThanEq :: Lexer CToken
+lexGreaterThanEq = symbol ">=" $> GreaterThanEq
+

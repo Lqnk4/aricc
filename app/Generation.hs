@@ -29,8 +29,12 @@ data Instruction where
   CQO :: Instruction
   NEG :: (Arg a) => a -> Instruction
   NOT :: (Arg a) => a -> Instruction
-  CMP :: (Arg a, Arg b) => a -> b -> Instruction
+  CMP :: (Arg a1, Arg a2) => a2 -> a1 -> Instruction
   SETE :: Arg8 -> Instruction
+  SETL :: Arg8 -> Instruction
+  SETLE :: Arg8 -> Instruction
+  SETG :: Arg8 -> Instruction
+  SETGE :: Arg8 -> Instruction
   RET :: Instruction
   -- labels for compatability with Writer [Instruction]
   Globl :: Text -> Instruction
@@ -60,6 +64,10 @@ instance Show Instruction where
         NOT arg1 -> ["not", show arg1]
         CMP arg1 arg2 -> ["cmp", show arg1 ++ ",", show arg2]
         SETE arg1 -> ["sete", show arg1]
+        SETL arg1 -> ["setl", show arg1]
+        SETLE arg1 -> ["setle", show arg1]
+        SETG arg1 -> ["setg", show arg1]
+        SETGE arg1 -> ["setge", show arg1]
         RET -> ["ret"]
         Globl _ -> undefined
         Label _ -> undefined
@@ -159,29 +167,49 @@ generateFunction (Fun name statement) = do
 
 generateStatement :: Statement -> Writer [Instruction] ()
 generateStatement (Return r) = do
-  generateExpression r
+  generateExp r
   tellInstr RET
 
--- generateExpression :: Exp -> Writer [Instruction] ()
--- generateExpression (Const x) = do
---   tellInstr $ MOVQ (QWORD x) RAX
--- generateExpression (UnaryOpExp op expr) = do
---   generateExpression expr
---   case op of
---     NegationOp -> do
---       tellInstr $ NEG RAX
---     BitwiseComplementOp -> do
---       tellInstr $ NOT RAX
---     LogicalNegationOp -> do
---       tell
---         [ CMP (QWORD 0) RAX,
---           MOVQ (QWORD 0) RAX,
---           SETE AL
---         ]
+generateExp :: Exp -> Writer [Instruction] ()
+generateExp (Exp l []) = generateLogicalAndExp l
+generateExp (Exp l ls) = undefined
 
-generateExpression :: Exp -> Writer [Instruction] ()
-generateExpression (Exp t []) = generateTerm t
-generateExpression (Exp t ts) = do
+generateLogicalAndExp :: LogicalAndExp -> Writer [Instruction] ()
+generateLogicalAndExp (LogicalAndExp e []) = generateEqualityExp e
+generateLogicalAndExp (LogicalAndExp e es) = undefined
+
+generateEqualityExp :: EqualityExp -> Writer [Instruction] ()
+generateEqualityExp (EqualityExp r []) = generateRelationalExp r
+generateEqualityExp (EqualityExp r rs) = undefined
+
+generateRelationalExp :: RelationalExp -> Writer [Instruction] ()
+generateRelationalExp (RelationalExp a []) = generateAdditiveExp a
+generateRelationalExp (RelationalExp a as) = do
+  generateAdditiveExp a
+  forM_
+    as
+    ( \(aOp, a') -> do
+        tellInstr $ PUSH RAX
+        generateAdditiveExp a'
+        tell
+          [ POP RCX
+          , CMP EAX ECX
+          , MOVQ (QWORD 0) RAX
+          ]
+        case aOp of
+          LessThanOp -> do
+            tellInstr $ SETL AL
+          LessThanEqOp -> do
+            tellInstr $ SETLE AL
+          GreaterThanOp -> do
+            tellInstr $ SETG AL
+          GreaterThanEqOp -> do
+            tellInstr $ SETGE AL
+    )
+
+generateAdditiveExp :: AdditiveExp -> Writer [Instruction] ()
+generateAdditiveExp (AdditiveExp t []) = generateTerm t
+generateAdditiveExp (AdditiveExp t ts) = do
   generateTerm t
   forM_
     ts
@@ -237,7 +265,7 @@ generateFactor (UnaryFactor op f) = do
           MOVL (DWORD 0) EAX,
           SETE AL
         ]
-generateFactor (Parens expr) = generateExpression expr
+generateFactor (Parens expr) = generateExp expr
 
 tellInstr :: Instruction -> Writer [Instruction] ()
 tellInstr = tell . pure
