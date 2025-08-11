@@ -6,12 +6,12 @@ import qualified Data.Text.IO as T
 import Generation
 import Lexer
 import Parser
+import System.Environment (getArgs)
 import System.Exit (exitFailure)
 import System.FilePath
 import System.IO
 import Text.Megaparsec (errorBundlePretty, runParser)
 import Prelude hiding (lex)
-import System.Environment
 
 main :: IO ()
 main = do
@@ -37,4 +37,3 @@ parseArgs [inFile] = return inFile
 parseArgs (arg : _) = do
   putStrLn "[WARN] currently only the first input file provided will be compiled"
   parseArgs [arg]
-

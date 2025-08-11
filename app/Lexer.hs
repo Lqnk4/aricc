@@ -14,11 +14,11 @@ import Data.Functor
 import qualified Data.List as DL
 import Data.List.NonEmpty (NonEmpty (..))
 import qualified Data.List.NonEmpty as NE
-import Data.Proxy
+import Data.Proxy (Proxy (..))
 import Data.Text (Text)
 import qualified Data.Text as T
-import Data.Void
-import Data.Word
+import Data.Void (Void)
+import Data.Word (Word32)
 import Text.Megaparsec
 import Text.Megaparsec.Char
 import qualified Text.Megaparsec.Char.Lexer as L
@@ -331,4 +331,3 @@ lexGreaterThan = symbol ">" $> GreaterThan
 
 lexGreaterThanEq :: Lexer CToken
 lexGreaterThanEq = symbol ">=" $> GreaterThanEq
-

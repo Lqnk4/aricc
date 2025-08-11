@@ -25,8 +25,8 @@ import qualified Data.Set as Set
 import Data.Text (Text)
 import qualified Data.Text as T
 import qualified Data.Text.IO as T
-import Data.Void
-import Data.Word
+import Data.Void (Void)
+import Data.Word (Word32)
 import Lexer
 import Text.Megaparsec
 
@@ -159,11 +159,12 @@ expP :: Parser Exp
 expP = Exp <$> logicalAndExpP <*> go []
   where
     go ls =
-      try ( do
-              result <- (,) <$> logicalAndExpOpP <*> logicalAndExpP
-              go (result : ls)
-          )
-          <|> pure (reverse ls)
+      try
+        ( do
+            result <- (,) <$> logicalAndExpOpP <*> logicalAndExpP
+            go (result : ls)
+        )
+        <|> pure (reverse ls)
 
 logicalAndExpP :: Parser LogicalAndExp
 logicalAndExpP = LogicalAndExp <$> equalityExpP <*> go []
