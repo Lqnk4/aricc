@@ -22,8 +22,6 @@ executable aricc
     Lexer
     Parser
     Generation
-
-  -- other-extensions:
   build-depends:
     filepath ^>=1.4.301.0,
     mtl ^>=2.3.1,
@@ -32,7 +30,6 @@ executable aricc
     megaparsec ^>=9.7.0,
     text ^>=2.0.2,
     filepath ^>=1.4.301.0,
-
   hs-source-dirs: app
   default-language: Haskell2010
   default-extensions: OverloadedStrings,
@@ -40,3 +37,15 @@ executable aricc
                       TypeFamilies,
                       RecordWildCards,
                       GADTs
+test-suite test-aricc
+    import: warnings
+    type: exitcode-stdio-1.0
+    main-is: Main.hs
+    build-depends:
+      base ^>=4.18.3.0,
+      HUnit ^>=1.6.2.0,
+      process ^>=1.6.26.1,
+      filepath ^>=1.4.301.0,
+    hs-source-dirs: test
+    default-language: Haskell2010
+
