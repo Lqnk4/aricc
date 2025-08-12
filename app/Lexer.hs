@@ -34,6 +34,7 @@ data CToken
   | IntKeyword
   | CharKeyword
   | ReturnKeyword
+  | Assignment
   | Identifier Text
   | IntLiteral Word32
   | Minus
@@ -64,6 +65,7 @@ showCToken = \case
   IntKeyword -> "int"
   CharKeyword -> "char"
   ReturnKeyword -> "return"
+  Assignment -> "="
   (Identifier name) -> name
   (IntLiteral n) -> T.pack (show n)
   Minus -> "-"
@@ -232,7 +234,8 @@ lex = do
           lexGreaterThanEq,
           lexGreaterThan,
           lexBitwiseComplement,
-          lexLogicalNegation
+          lexLogicalNegation,
+          lexAssignment
         ]
 
 --
@@ -262,6 +265,9 @@ lexCharKeyword = keyword "char" $> CharKeyword
 
 lexReturnKeyword :: Lexer CToken
 lexReturnKeyword = keyword "return" $> ReturnKeyword
+
+lexAssignment :: Lexer CToken
+lexAssignment = symbol "=" $> Assignment
 
 -- TODO: https://en.cppreference.com/w/c/language/identifiers.html
 lexIdentifier :: Lexer CToken

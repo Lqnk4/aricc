@@ -23,6 +23,4 @@ cabal.project.local~
 .ghc.environment.*
 tags
 
-test/*
-!test/*.hs
-!test/*.c
+test/build/*

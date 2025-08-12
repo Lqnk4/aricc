@@ -179,12 +179,12 @@ generateASM prog = concatMap show
     initialGenState = GeneratorState {gsLabelCounter = 0}
 
 generateFunction :: FunDecl -> Generator ()
-generateFunction (Fun name statement) = do
+generateFunction (Fun name statements) = do
   tellInstrs
     [ Globl name,
       Label name
     ]
-  generateStatement statement
+  mapM_ generateStatement statements
 
 generateStatement :: Statement -> Generator ()
 generateStatement (Return r) = do

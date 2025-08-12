@@ -21,6 +21,7 @@ module Parser
   )
 where
 
+import Control.Monad
 import qualified Data.Set as Set
 import Data.Text (Text)
 import qualified Data.Text as T
@@ -29,15 +30,6 @@ import Data.Void (Void)
 import Data.Word (Word32)
 import Lexer
 import Text.Megaparsec
-
-{- Week 3
-<program> ::= <function>
-<function> ::= "int" <id> "(" ")" "{" <statement> "}"
-<statement> ::= "return" <exp> ";"
-<exp> ::= <term> { ("+" | "-") <term> }
-<term> ::= <factor> { ("*" | "/") <factor> }
-<factor> ::= "(" <exp> ")" | <unary_op> <factor> | <int>
--}
 
 {- Week 4
 <program> ::= <function>
@@ -53,17 +45,40 @@ import Text.Megaparsec
 <unary_op> ::= "!" | "~" | "-"
 -}
 
+{- Week 5
+<program> ::= <function>
+<function> ::= "int" <id> "(" ")" "{" { <statement> } "}"
+<statement> ::= "return" <exp> ";"
+              | <exp> ";"
+              | "int" <id> [ = <exp>] ";"
+<exp> ::= <id> "=" <exp> | <logical-or-exp>
+<logical-or-exp> ::= <logical-and-exp> { "||" <logical-and-exp> }
+<logical-and-exp> ::= <equality-exp> { "&&" <equality-exp> }
+<equality-exp> ::= <relational-exp> { ("!=" | "==") <relational-exp> }
+<relational-exp> ::= <additive-exp> { ("<" | ">" | "<=" | ">=") <additive-exp> }
+<additive-exp> ::= <term> { ("+" | "-") <term> }
+<term> ::= <factor> { ("*" | "/") <factor> }
+<factor> ::= "(" <exp> ")" | <unary_op> <factor> | <int> | <id>
+<unary_op> ::= "!" | "~" | "-"
+-}
+
 type Parser = Parsec Void TokenStream
 
 newtype Program where
   Program :: {getFunDecl :: FunDecl} -> Program
   deriving (Show)
 
-data FunDecl = Fun Text Statement deriving (Show)
+data FunDecl = Fun Text [Statement] deriving (Show)
 
-newtype Statement = Return Exp deriving (Show)
+data Statement
+  = Return Exp
+  | Declare Text (Maybe Exp)
+  | SExp Exp
+  deriving (Show)
 
-data Exp = Exp LogicalAndExp [(LogicalAndExpOp, LogicalAndExp)]
+data Exp
+  = Assign Text Exp
+  | Exp LogicalAndExp [(LogicalAndExpOp, LogicalAndExp)]
   deriving (Show, Eq)
 
 data LogicalAndExp = LogicalAndExp EqualityExp [(EqualityExpOp, EqualityExp)]
@@ -85,6 +100,7 @@ data Factor
   = Parens Exp
   | UnaryFactor UnaryOp Factor
   | Const Word32
+  | Var Text
   deriving (Show, Eq)
 
 data LogicalAndExpOp
@@ -123,7 +139,7 @@ data FactorOp
   | DivisionOp
   deriving (Show, Eq)
 
--- TODO: use show instances instead
+-- TODO: use StateT for indent level and just make it look nice
 prettyPrintAST :: Program -> IO ()
 prettyPrintAST prog = do
   printProg 0 prog
@@ -134,14 +150,19 @@ prettyPrintAST prog = do
 
     printProg n program = printFunDecl n (getFunDecl program)
 
-    printFunDecl n (Fun name statement) = do
+    printFunDecl n (Fun name statements) = do
       indentPrint n $ "FunDecl" <+> "INT" <+> name
       indentPrint (n + 1) $ "params:" <+> "()"
       indentPrint (n + 1) "body:"
-      printStatement (n + 2) statement
+      forM_ statements $ \statement -> do
+        printStatement (n + 2) statement
 
     printStatement n (Return expr) = do
       indentPrint n $ "RETURN" <+> T.pack (show expr)
+    printStatement n (Declare name expr) = do
+      indentPrint n $ "DECLARE" <+> name <+> T.pack (show expr)
+    printStatement n (SExp expr) = do
+      indentPrint n (T.pack (show expr))
 
 parse :: Parser Program
 parse = Program <$> (beginFileP *> funDeclP <* eofP)
@@ -150,10 +171,17 @@ funDeclP :: Parser FunDecl
 funDeclP =
   Fun
     <$> (intKeywordP *> identifierP)
-    <*> (openParenP *> closeParenP *> between openBraceP closeBraceP statementP)
+    <*> (openParenP *> closeParenP *> between openBraceP closeBraceP (some statementP))
 
 statementP :: Parser Statement
-statementP = Return <$> (returnKeywordP *> expP <* semicolonP)
+statementP =
+  Return
+    <$> (returnKeywordP *> expP <* semicolonP)
+      <|> SExp
+    <$> (expP <* semicolonP)
+      <|> Declare
+    <$> (intKeywordP *> identifierP)
+    <*> withRecovery (const $ pure Nothing) (Just <$> between assignmentP semicolonP expP)
 
 expP :: Parser Exp
 expP = Exp <$> logicalAndExpP <*> go []
@@ -231,6 +259,8 @@ factorP =
     <*> factorP
       <|> Const
     <$> intP
+      <|> Var
+    <$> identifierP
 
 --
 -- Token Primitives
@@ -248,6 +278,13 @@ identifierP = token test Set.empty
   where
     test = \case
       (WithPos {tokenVal = Identifier name}) -> Just name
+      _ -> Nothing
+
+assignmentP :: Parser ()
+assignmentP = token test Set.empty
+  where
+    test = \case
+      (WithPos {tokenVal = Assignment}) -> Just ()
       _ -> Nothing
 
 semicolonP :: Parser ()

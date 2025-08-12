@@ -3,8 +3,14 @@ import System.FilePath
 import System.Process
 import Test.HUnit
 
-cSourceDir :: FilePath
-cSourceDir = "test"
+testDir :: FilePath
+testDir = "test"
+
+buildDir :: FilePath
+buildDir = testDir </> "build"
+
+compilerTestDir :: FilePath
+compilerTestDir = testDir </> "compiler"
 
 as :: String
 as = "gcc"
@@ -12,19 +18,17 @@ as = "gcc"
 asFlags :: [String]
 asFlags = ["-g"]
 
+-- | Whole compiler tests
 data CompilerTest = ExitCodeTest FilePath ExitCode
 
 instance Testable CompilerTest where
-  -- TODO: Move asm and executable files into build dir within test/
-  -- Add output path cmd flag to the compiler
-  -- update silly gitignore setup for test/
   test (ExitCodeTest filePath expectedCode) =
     TestLabel (dropExtension filePath) $
       TestCase $ do
-        let filePath' = cSourceDir </> filePath
-        callProcess "cabal" ["run", "aricc", "--", filePath']
-        let asmFilePath = replaceExtension filePath' "s"
+        let filePath' = compilerTestDir </> filePath
+        let asmFilePath = replaceExtension (buildDir </> filePath) "s"
             outputPath = dropExtension asmFilePath
+        callProcess "cabal" ["run", "aricc", "--", filePath', "-o", asmFilePath]
         callProcess as $ asFlags ++ [asmFilePath, "-o", outputPath]
         processHandle <- spawnProcess outputPath []
         exitCode <- waitForProcess processHandle

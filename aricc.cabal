@@ -36,7 +36,8 @@ executable aricc
                       LambdaCase,
                       TypeFamilies,
                       RecordWildCards,
-                      GADTs
+                      GADTs,
+                      NamedFieldPuns
 test-suite test-aricc
     import: warnings
     type: exitcode-stdio-1.0
