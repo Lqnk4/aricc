@@ -22,6 +22,8 @@ module Parser
 where
 
 import Control.Monad
+import qualified Data.List.NonEmpty as NE
+import Data.Maybe
 import qualified Data.Set as Set
 import Data.Text (Text)
 import qualified Data.Text as T
@@ -30,6 +32,7 @@ import Data.Void (Void)
 import Data.Word (Word32)
 import Lexer
 import Text.Megaparsec
+import Data.List (groupBy)
 
 {- Week 4
 <program> ::= <function>
@@ -171,7 +174,35 @@ funDeclP :: Parser FunDecl
 funDeclP =
   Fun
     <$> (intKeywordP *> identifierP)
-    <*> (openParenP *> closeParenP *> between openBraceP closeBraceP (some statementP))
+    <*> ( openParenP
+            *> closeParenP
+            *> between
+              openBraceP
+              closeBraceP
+              ( do
+                  statements <- many statementWithOffsetP
+                  let decls = groupBy (\v1 v2 -> fst v1 == fst v2) . filterVarDecls $ statements
+                      duplicateDecls = concatMap tail . filter ((> 1) . length) $ decls
+                  mapM_
+                    ( \(name, offset) ->
+                        registerParseError $
+                          TrivialError
+                            offset
+                            (Just . Label $ ' ' NE.:| "Duplicate variable declaration of `" ++ T.unpack name ++ "`")
+                            Set.empty
+                    )
+                    duplicateDecls
+                  return $ map fst statements
+              )
+        )
+  where
+    statementWithOffsetP = do
+      offset <- getOffset
+      statement <- statementP
+      return (statement, offset)
+    filterVarDecls =
+      mapMaybe
+        (\case (Declare name _, offset) -> Just (name, offset); _ -> Nothing)
 
 statementP :: Parser Statement
 statementP =
@@ -181,7 +212,7 @@ statementP =
     <$> (expP <* semicolonP)
       <|> Declare
     <$> (intKeywordP *> identifierP)
-    <*> withRecovery (const $ pure Nothing) (Just <$> between assignmentP semicolonP expP)
+    <*> withRecovery (const (Nothing <$ semicolonP)) (Just <$> between assignmentP semicolonP expP)
 
 expP :: Parser Exp
 expP = Exp <$> logicalAndExpP <*> go []

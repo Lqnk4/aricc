@@ -7,13 +7,19 @@ import Control.Monad
 import Control.Monad.State
 import Control.Monad.Writer.Lazy
 import Data.Int (Int32)
+import qualified Data.Map.Strict as Map
 import Data.Monoid (Endo (..))
 import Data.Text (Text)
 import qualified Data.Text as T
 import Data.Word (Word16, Word32, Word64, Word8)
 import Parser
 
-newtype GeneratorState = GeneratorState {gsLabelCounter :: Int}
+data GeneratorState = GeneratorState
+  { gsLabelCounter :: Int,
+    gsVarMap :: Map.Map Text Int,
+    gsStackIndex :: Int
+  }
+  deriving (Show, Eq)
 
 type Generator a = StateT GeneratorState (Writer (Endo [Instruction])) a
 
@@ -104,8 +110,18 @@ data Arg64
   | RAX
   | RBX
   | RCX
-  | RDI
   | RSI
+  | RDI
+  | RSP
+  | RBP
+  | R8
+  | R9
+  | R10
+  | R11
+  | R12
+  | R13
+  | R14
+  | R15
   | EffectiveAddr64 Displacement32 Arg64 Arg64 Scale
 
 instance Arg Arg64
@@ -115,8 +131,18 @@ instance Show Arg64 where
   show RAX = "%rax"
   show RBX = "%rbx"
   show RCX = "%rcx"
-  show RDI = "%rdi"
   show RSI = "%rsi"
+  show RDI = "%rdi"
+  show RSP = "%rsp"
+  show RBP = "%rbp"
+  show R8 = "%r8"
+  show R9 = "%r9"
+  show R10 = "%r10"
+  show R11 = "%r11"
+  show R12 = "%r12"
+  show R13 = "%r13"
+  show R14 = "%r14"
+  show R15 = "%r15"
   show (EffectiveAddr64 displacement base index scale) =
     show displacement ++ "(" ++ show base ++ ", " ++ show index ++ ", " ++ show scale ++ ")"
 
@@ -128,7 +154,16 @@ data Arg32
   | EDX
   | ESI
   | EDI
+  | ESP
   | EBP
+  | R8D
+  | R9D
+  | R10D
+  | R11D
+  | R12D
+  | R13D
+  | R14D
+  | R15D
   | EffectiveAddr32 Displacement32 Arg32 Arg32 Scale
 
 instance Arg Arg32
@@ -140,8 +175,17 @@ instance Show Arg32 where
   show ECX = "%ecx"
   show EDX = "%edx"
   show EDI = "%edi"
-  show ESI = "%esi"
   show EBP = "%ebp"
+  show ESI = "%esi"
+  show ESP = "%esp"
+  show R8D = "%r8d"
+  show R9D = "%r9d"
+  show R10D = "%r10d"
+  show R11D = "%r11d"
+  show R12D = "%r12d"
+  show R13D = "%r13d"
+  show R14D = "%r14d"
+  show R15D = "%r15d"
   show (EffectiveAddr32 displacement base index scale) =
     show displacement ++ "(" ++ show base ++ ", " ++ show index ++ ", " ++ show scale ++ ")"
 
@@ -176,20 +220,54 @@ generateASM prog = concatMap show
   $ do
     generateFunction (getFunDecl prog)
   where
-    initialGenState = GeneratorState {gsLabelCounter = 0}
+    initialGenState =
+      GeneratorState
+        { gsLabelCounter = 0,
+          gsVarMap = Map.empty,
+          gsStackIndex = 0
+        }
 
 generateFunction :: FunDecl -> Generator ()
 generateFunction (Fun name statements) = do
+  modify resetGenState
   tellInstrs
     [ Globl name,
       Label name
     ]
+  tellInstrs
+    [ PUSH RBP,
+      MOVQ RSP RBP
+    ]
   mapM_ generateStatement statements
+  where
+    resetGenState genState = genState {gsVarMap = Map.empty, gsStackIndex = 0}
 
 generateStatement :: Statement -> Generator ()
 generateStatement (Return r) = do
   generateExp r
+  tellInstrs
+    [ MOVQ RBP RSP,
+      POP RBP
+    ]
   tellInstr RET
+generateStatement (Declare name mr) = do
+  maybe
+    (tellInstr $ MOVQ (QWORD 0) RAX)
+    generateExp
+    mr
+  tellInstr $ PUSH RAX
+  insertVar name 8
+  where
+    insertVar :: Text -> Int -> Generator ()
+    insertVar varName varSize = do
+      oldVarMap <- gets gsVarMap
+      oldStackIndex <- gets gsStackIndex
+      modify $ \genState ->
+        genState
+          { gsVarMap = Map.insert varName (oldStackIndex - varSize) oldVarMap,
+            gsStackIndex = oldStackIndex - varSize
+          }
+generateStatement (SExp sexp) = generateExp sexp
 
 generateExp :: Exp -> Generator ()
 generateExp (Exp l []) = generateLogicalAndExp l

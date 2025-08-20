@@ -2,7 +2,6 @@ module Main where
 
 import Control.Monad
 import Control.Monad.Reader
-import Data.Either
 import Data.Maybe (fromMaybe)
 import qualified Data.Text.IO as T
 import Generation
