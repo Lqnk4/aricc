@@ -84,5 +84,12 @@ compilerTests =
       ExitCodeTest "le_false.c" ExitSuccess,
       ExitCodeTest "le_true.c" (ExitFailure 1),
       ExitCodeTest "and_or_precedence.c" (ExitFailure 1),
-      ExitCodeTest "eq_or_precedence.c" (ExitFailure 1)
+      ExitCodeTest "eq_or_precedence.c" (ExitFailure 1),
+      -- Week 5
+      ExitCodeTest "assign.c" (ExitFailure 2),
+      ExitCodeTest "assign_val.c" ExitSuccess,
+      ExitCodeTest "exp_return_val.c" ExitSuccess,
+      ExitCodeTest "multiple_vars.c" (ExitFailure 3),
+      ExitCodeTest "unused_exp.c" ExitSuccess,
+      ExitCodeTest "missing_return.c" ExitSuccess
     ]

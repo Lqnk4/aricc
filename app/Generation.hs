@@ -16,8 +16,8 @@ import Parser
 
 data GeneratorState = GeneratorState
   { gsLabelCounter :: Int,
-    gsVarMap :: Map.Map Text Int,
-    gsStackIndex :: Int
+    gsVarMap :: Map.Map Text Int32,
+    gsStackIndex :: Int32
   }
   deriving (Show, Eq)
 
@@ -122,7 +122,8 @@ data Arg64
   | R13
   | R14
   | R15
-  | EffectiveAddr64 Displacement32 Arg64 Arg64 Scale
+  | EA64 Displacement32 Arg64 Arg64 Scale
+  | OffsetAddr64 Displacement32 Arg64
 
 instance Arg Arg64
 
@@ -143,8 +144,10 @@ instance Show Arg64 where
   show R13 = "%r13"
   show R14 = "%r14"
   show R15 = "%r15"
-  show (EffectiveAddr64 displacement base index scale) =
+  show (EA64 displacement base index scale) =
     show displacement ++ "(" ++ show base ++ ", " ++ show index ++ ", " ++ show scale ++ ")"
+  show (OffsetAddr64 displacement base) =
+    show displacement ++ "(" ++ show base ++ ")"
 
 data Arg32
   = DWORD Word32
@@ -164,7 +167,8 @@ data Arg32
   | R13D
   | R14D
   | R15D
-  | EffectiveAddr32 Displacement32 Arg32 Arg32 Scale
+  | EA32 Displacement32 Arg32 Arg32 Scale
+  | OffsetAddr32 Displacement32 Arg32
 
 instance Arg Arg32
 
@@ -186,8 +190,10 @@ instance Show Arg32 where
   show R13D = "%r13d"
   show R14D = "%r14d"
   show R15D = "%r15d"
-  show (EffectiveAddr32 displacement base index scale) =
+  show (EA32 displacement base index scale) =
     show displacement ++ "(" ++ show base ++ ", " ++ show index ++ ", " ++ show scale ++ ")"
+  show (OffsetAddr32 displacement base) =
+    show displacement ++ "(" ++ show base ++ ")"
 
 data Arg16
   = WORD Word16
@@ -258,12 +264,12 @@ generateStatement (Declare name mr) = do
   tellInstr $ PUSH RAX
   insertVar name 8
   where
-    insertVar :: Text -> Int -> Generator ()
+    insertVar :: Text -> Int32 -> Generator ()
     insertVar varName varSize = do
       oldVarMap <- gets gsVarMap
       oldStackIndex <- gets gsStackIndex
-      modify $ \genState ->
-        genState
+      modify $ \gs ->
+        gs
           { gsVarMap = Map.insert varName (oldStackIndex - varSize) oldVarMap,
             gsStackIndex = oldStackIndex - varSize
           }
@@ -295,6 +301,11 @@ generateExp (Exp l ls) = do
                 Label endLabel
               ]
     )
+generateExp (Assign name expr) = do
+  generateExp expr
+  varMap <- gets gsVarMap
+  let varOffset = varMap Map.! name
+  tellInstr $ MOVQ RAX (OffsetAddr64 varOffset RBP)
 
 generateLogicalAndExp :: LogicalAndExp -> Generator ()
 generateLogicalAndExp (LogicalAndExp e []) = generateEqualityExp e
@@ -427,6 +438,10 @@ generateFactor (UnaryFactor op f) = do
           SETE AL
         ]
 generateFactor (Parens expr) = generateExp expr
+generateFactor (Var name) = do
+  varMap <- gets gsVarMap
+  let varOffset = varMap Map.! name
+  tellInstr $ MOVQ (OffsetAddr64 varOffset RBP) RAX
 
 tellInstr :: Instruction -> Generator ()
 tellInstr = tellInstrs . pure

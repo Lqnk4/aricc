@@ -177,9 +177,28 @@ parse = evalStateT (Program <$> (beginFileP *> funDeclP <* eofP)) initialState
 funDeclP :: Parser FunDecl
 funDeclP = do
   modify $ \ps -> ps {psLocalVars = Set.empty}
-  Fun
-    <$> (intKeywordP *> identifierP)
-    <*> (openParenP *> closeParenP *> between openBraceP closeBraceP (many statementP))
+  funName <- intKeywordP *> identifierP
+  offset <- getOffset
+  statements <- openParenP *> closeParenP *> between openBraceP closeBraceP (many statementP)
+  statements' <- case unsnoc statements of
+    Just (_, Return _) -> pure statements
+    _ ->
+      if funName == "main"
+        then pure $ statements ++ [Return exp0]
+        else do
+          registerParseError $
+            TrivialError
+              offset
+              (Just . Label $ ' ' :| "function `" ++ T.unpack funName ++ "` missing return statement")
+              Set.empty
+          return statements
+  return $ Fun funName statements'
+  where
+    unsnoc :: [a] -> Maybe ([a], a)
+    unsnoc = foldr (\x -> Just . maybe ([], x) (\(~(a, b)) -> (x : a, b))) Nothing
+    {-# INLINEABLE unsnoc #-}
+    exp0 :: Exp
+    exp0 = Exp (LogicalAndExp (EqualityExp (RelationalExp (AdditiveExp (Term (Const 0) []) []) []) []) []) []
 
 statementP :: Parser Statement
 statementP =
@@ -191,7 +210,7 @@ statementP =
       <|> do
         offset <- getOffset
         identifier <- intKeywordP *> identifierP
-        mexp <- withRecovery (const (Nothing <$ semicolonP)) (Just <$> between assignmentP semicolonP expP)
+        mexp <- (Just <$> between assignmentP semicolonP expP) <|> (Nothing <$ semicolonP)
         localVars <- gets psLocalVars
         if Set.member identifier localVars
           then
@@ -205,18 +224,20 @@ statementP =
 
 expP :: Parser Exp
 expP =
-  do
-    offset <- getOffset
-    identifier <- identifierP <* assignmentP
-    expr <- expP
-    localVars <- gets psLocalVars
-    unless (Set.member identifier localVars) $ do
-      registerParseError $
-        TrivialError
-          offset
-          (Just . Label $ ' ' :| "assignment to undeclared variable `" ++ T.unpack identifier ++ "`")
-          Set.empty
-    return $ Assign identifier expr
+  try
+    ( do
+        offset <- getOffset
+        identifier <- identifierP <* assignmentP
+        expr <- expP
+        localVars <- gets psLocalVars
+        unless (Set.member identifier localVars) $ do
+          registerParseError $
+            TrivialError
+              offset
+              (Just . Label $ ' ' :| "assignment to undeclared variable `" ++ T.unpack identifier ++ "`")
+              Set.empty
+        return $ Assign identifier expr
+    )
     <|> ( Exp
             <$> logicalAndExpP
             <*> go []
