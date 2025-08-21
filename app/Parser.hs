@@ -22,8 +22,8 @@ module Parser
 where
 
 import Control.Monad
-import qualified Data.List.NonEmpty as NE
-import Data.Maybe
+import Control.Monad.State
+import Data.List.NonEmpty (NonEmpty (..))
 import qualified Data.Set as Set
 import Data.Text (Text)
 import qualified Data.Text as T
@@ -31,8 +31,7 @@ import qualified Data.Text.IO as T
 import Data.Void (Void)
 import Data.Word (Word32)
 import Lexer
-import Text.Megaparsec
-import Data.List (groupBy)
+import Text.Megaparsec hiding (State)
 
 {- Week 4
 <program> ::= <function>
@@ -65,7 +64,10 @@ import Data.List (groupBy)
 <unary_op> ::= "!" | "~" | "-"
 -}
 
-type Parser = Parsec Void TokenStream
+newtype ParserState
+  = ParserState {psLocalVars :: Set.Set Text}
+
+type Parser = StateT ParserState (Parsec Void TokenStream)
 
 newtype Program where
   Program :: {getFunDecl :: FunDecl} -> Program
@@ -167,42 +169,17 @@ prettyPrintAST prog = do
     printStatement n (SExp expr) = do
       indentPrint n (T.pack (show expr))
 
-parse :: Parser Program
-parse = Program <$> (beginFileP *> funDeclP <* eofP)
+parse :: Parsec Void TokenStream Program
+parse = evalStateT (Program <$> (beginFileP *> funDeclP <* eofP)) initialState
+  where
+    initialState = ParserState {psLocalVars = Set.empty}
 
 funDeclP :: Parser FunDecl
-funDeclP =
+funDeclP = do
+  modify $ \ps -> ps {psLocalVars = Set.empty}
   Fun
     <$> (intKeywordP *> identifierP)
-    <*> ( openParenP
-            *> closeParenP
-            *> between
-              openBraceP
-              closeBraceP
-              ( do
-                  statements <- many statementWithOffsetP
-                  let decls = groupBy (\v1 v2 -> fst v1 == fst v2) . filterVarDecls $ statements
-                      duplicateDecls = concatMap tail . filter ((> 1) . length) $ decls
-                  mapM_
-                    ( \(name, offset) ->
-                        registerParseError $
-                          TrivialError
-                            offset
-                            (Just . Label $ ' ' NE.:| "Duplicate variable declaration of `" ++ T.unpack name ++ "`")
-                            Set.empty
-                    )
-                    duplicateDecls
-                  return $ map fst statements
-              )
-        )
-  where
-    statementWithOffsetP = do
-      offset <- getOffset
-      statement <- statementP
-      return (statement, offset)
-    filterVarDecls =
-      mapMaybe
-        (\case (Declare name _, offset) -> Just (name, offset); _ -> Nothing)
+    <*> (openParenP *> closeParenP *> between openBraceP closeBraceP (many statementP))
 
 statementP :: Parser Statement
 statementP =
@@ -210,12 +187,40 @@ statementP =
     <$> (returnKeywordP *> expP <* semicolonP)
       <|> SExp
     <$> (expP <* semicolonP)
-      <|> Declare
-    <$> (intKeywordP *> identifierP)
-    <*> withRecovery (const (Nothing <$ semicolonP)) (Just <$> between assignmentP semicolonP expP)
+      -- Declare
+      <|> do
+        offset <- getOffset
+        identifier <- intKeywordP *> identifierP
+        mexp <- withRecovery (const (Nothing <$ semicolonP)) (Just <$> between assignmentP semicolonP expP)
+        localVars <- gets psLocalVars
+        if Set.member identifier localVars
+          then
+            registerParseError $
+              TrivialError
+                offset
+                (Just . Label $ ' ' :| "duplicate variable declaration of `" ++ T.unpack identifier ++ "`")
+                Set.empty
+          else modify $ \ps -> ps {psLocalVars = Set.insert identifier localVars}
+        return $ Declare identifier mexp
 
 expP :: Parser Exp
-expP = Exp <$> logicalAndExpP <*> go []
+expP =
+  do
+    offset <- getOffset
+    identifier <- identifierP <* assignmentP
+    expr <- expP
+    localVars <- gets psLocalVars
+    unless (Set.member identifier localVars) $ do
+      registerParseError $
+        TrivialError
+          offset
+          (Just . Label $ ' ' :| "assignment to undeclared variable `" ++ T.unpack identifier ++ "`")
+          Set.empty
+    return $ Assign identifier expr
+    <|> ( Exp
+            <$> logicalAndExpP
+            <*> go []
+        )
   where
     go ls =
       try
