@@ -61,6 +61,7 @@ compilerTests =
       ExitCodeTest "subtract_neg.c" (ExitFailure 3),
       ExitCodeTest "multiplication.c" (ExitFailure 6),
       ExitCodeTest "division.c" (ExitFailure 2),
+      ExitCodeTest "modulo.c" (ExitFailure 1),
       ExitCodeTest "parenthesis.c" (ExitFailure 14),
       ExitCodeTest "unary_op_parenthesis.c" (ExitFailure 253),
       ExitCodeTest "associativity_1.c" (ExitFailure 252),

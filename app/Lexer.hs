@@ -51,6 +51,7 @@ data CToken
   | GreaterThan
   | GreaterThanEq
   | Division
+  | Modulo
   | BeginFile
   | EOF
   deriving (Eq, Ord, Show)
@@ -74,6 +75,7 @@ showCToken = \case
   Addition -> "+"
   Multiplication -> "*"
   Division -> "/"
+  Modulo -> "%"
   And -> "&&"
   Or -> "||"
   Equal -> "=="
@@ -225,6 +227,7 @@ lex = do
           lexAddition,
           lexMultiplication,
           lexDivision,
+          lexModulo,
           lexAnd,
           lexOr,
           lexEqual,
@@ -313,6 +316,9 @@ lexMultiplication = symbol "*" $> Multiplication
 
 lexDivision :: Lexer CToken
 lexDivision = symbol "/" $> Division
+
+lexModulo :: Lexer CToken
+lexModulo = symbol "%" $> Modulo
 
 lexAnd :: Lexer CToken
 lexAnd = symbol "&&" $> And

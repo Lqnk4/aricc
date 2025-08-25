@@ -423,7 +423,13 @@ generateTerm (Term f fs) = do
                 IDIVL ECX
               ]
           ModuloOp -> do
-            undefined
+            tellInstrs
+              [ MOVL EAX ECX,
+                POP RAX,
+                CDQ,
+                IDIVL ECX,
+                MOVL EDX EAX
+              ]
     )
 
 generateFactor :: Factor -> Generator ()

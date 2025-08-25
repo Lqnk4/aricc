@@ -142,6 +142,7 @@ data TermOp
 data FactorOp
   = MultiplicationOp
   | DivisionOp
+  | ModuloOp
   deriving (Show, Eq)
 
 -- TODO: use StateT for indent level and just make it look nice
@@ -441,6 +442,7 @@ factorOpP = token test Set.empty
   where
     test (WithPos _ _ _ Multiplication) = Just MultiplicationOp
     test (WithPos _ _ _ Division) = Just DivisionOp
+    test (WithPos _ _ _ Modulo) = Just ModuloOp
     test _ = Nothing
 
 beginFileP :: Parser ()
