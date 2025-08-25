@@ -105,25 +105,25 @@ instance Show Scale where
 
 class (Show a) => Arg a
 
-data Arg64
-  = QWORD Word64
-  | RAX
-  | RBX
-  | RCX
-  | RSI
-  | RDI
-  | RSP
-  | RBP
-  | R8
-  | R9
-  | R10
-  | R11
-  | R12
-  | R13
-  | R14
-  | R15
-  | EA64 Displacement32 Arg64 Arg64 Scale
-  | OffsetAddr64 Displacement32 Arg64
+data Arg64 where
+  QWORD :: Word64 -> Arg64
+  RAX :: Arg64
+  RBX :: Arg64
+  RCX :: Arg64
+  RSI :: Arg64
+  RDI :: Arg64
+  RSP :: Arg64
+  RBP :: Arg64
+  R8 :: Arg64
+  R9 :: Arg64
+  R10 :: Arg64
+  R11 :: Arg64
+  R12 :: Arg64
+  R13 :: Arg64
+  R14 :: Arg64
+  R15 :: Arg64
+  EA64 :: Displacement32 -> Arg64 -> Arg64 -> Scale -> Arg64
+  OffsetAddr64 :: Displacement32 -> Arg64 -> Arg64
 
 instance Arg Arg64
 
@@ -149,26 +149,26 @@ instance Show Arg64 where
   show (OffsetAddr64 displacement base) =
     show displacement ++ "(" ++ show base ++ ")"
 
-data Arg32
-  = DWORD Word32
-  | EAX
-  | EBX
-  | ECX
-  | EDX
-  | ESI
-  | EDI
-  | ESP
-  | EBP
-  | R8D
-  | R9D
-  | R10D
-  | R11D
-  | R12D
-  | R13D
-  | R14D
-  | R15D
-  | EA32 Displacement32 Arg32 Arg32 Scale
-  | OffsetAddr32 Displacement32 Arg32
+data Arg32 where
+  DWORD :: Word32 -> Arg32
+  EAX :: Arg32
+  EBX :: Arg32
+  ECX :: Arg32
+  EDX :: Arg32
+  ESI :: Arg32
+  EDI :: Arg32
+  ESP :: Arg32
+  EBP :: Arg32
+  R8D :: Arg32
+  R9D :: Arg32
+  R10D :: Arg32
+  R11D :: Arg32
+  R12D :: Arg32
+  R13D :: Arg32
+  R14D :: Arg32
+  R15D :: Arg32
+  EA32 :: Displacement32 -> Arg64 -> Arg32 -> Scale -> Arg32
+  OffsetAddr32 :: Displacement32 -> Arg64 -> Arg32
 
 instance Arg Arg32
 
@@ -261,6 +261,8 @@ generateStatement (Declare name mr) = do
     (tellInstr $ MOVQ (QWORD 0) RAX)
     generateExp
     mr
+  -- NOTE: currently using `push` instead of `movl` to store ints, wasting space
+  -- Modern compilers dont seem to use push for stack allocation anymore so something to consider
   tellInstr $ PUSH RAX
   insertVar name 8
   where
@@ -420,6 +422,8 @@ generateTerm (Term f fs) = do
                 CDQ,
                 IDIVL ECX
               ]
+          ModuloOp -> do
+            undefined
     )
 
 generateFactor :: Factor -> Generator ()
@@ -441,7 +445,7 @@ generateFactor (Parens expr) = generateExp expr
 generateFactor (Var name) = do
   varMap <- gets gsVarMap
   let varOffset = varMap Map.! name
-  tellInstr $ MOVQ (OffsetAddr64 varOffset RBP) RAX
+  tellInstr $ MOVL (OffsetAddr32 varOffset RBP) EAX
 
 tellInstr :: Instruction -> Generator ()
 tellInstr = tellInstrs . pure
