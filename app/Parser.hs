@@ -11,6 +11,8 @@ module Parser
     EqualityExpOp (..),
     RelationalExp (..),
     RelationalExpOp (..),
+    BitwiseExp (..),
+    BitwiseExpOp (..),
     AdditiveExp (..),
     AdditiveExpOp (..),
     Term (..),
@@ -33,20 +35,6 @@ import Data.Word (Word32)
 import Lexer
 import Text.Megaparsec hiding (State)
 
-{- Week 4
-<program> ::= <function>
-<function> ::= "int" <id> "(" ")" "{" <statement> "}"
-<statement> ::= "return" <exp> ";"
-<exp> ::= <logical-and-exp> { "||" <logical-and-exp> }
-<logical-and-exp> ::= <equality-exp> { "&&" <equality-exp> }
-<equality-exp> ::= <relational-exp> { ("!=" | "==") <relational-exp> }
-<relational-exp> ::= <additive-exp> { ("<" | ">" | "<=" | ">=") <additive-exp> }
-<additive-exp> ::= <term> { ("+" | "-") <term> }
-<term> ::= <factor> { ("*" | "/") <factor> }
-<factor> ::= "(" <exp> ")" | <unary_op> <factor> | <int>
-<unary_op> ::= "!" | "~" | "-"
--}
-
 {- Week 5
 <program> ::= <function>
 <function> ::= "int" <id> "(" ")" "{" { <statement> } "}"
@@ -59,7 +47,7 @@ import Text.Megaparsec hiding (State)
 <equality-exp> ::= <relational-exp> { ("!=" | "==") <relational-exp> }
 <relational-exp> ::= <additive-exp> { ("<" | ">" | "<=" | ">=") <additive-exp> }
 <additive-exp> ::= <term> { ("+" | "-") <term> }
-<term> ::= <factor> { ("*" | "/") <factor> }
+<term> ::= <factor> { ("*" | "/" | "%") <factor> }
 <factor> ::= "(" <exp> ")" | <unary_op> <factor> | <int> | <id>
 <unary_op> ::= "!" | "~" | "-"
 -}
@@ -92,7 +80,10 @@ data LogicalAndExp = LogicalAndExp EqualityExp [(EqualityExpOp, EqualityExp)]
 data EqualityExp = EqualityExp RelationalExp [(RelationalExpOp, RelationalExp)]
   deriving (Show, Eq)
 
-data RelationalExp = RelationalExp AdditiveExp [(AdditiveExpOp, AdditiveExp)]
+data RelationalExp = RelationalExp BitwiseExp [(BitwiseExpOp, BitwiseExp)]
+  deriving (Show, Eq)
+
+data BitwiseExp = BitwiseExp AdditiveExp [(AdditiveExpOp, AdditiveExp)]
   deriving (Show, Eq)
 
 data AdditiveExp = AdditiveExp Term [(TermOp, Term)]
@@ -128,9 +119,14 @@ data RelationalExpOp
   deriving (Show, Eq)
 
 data AdditiveExpOp
+  = BitwiseLeftShiftOp
+  | BitwiseRightShiftOp
+  deriving (Show, Eq)
+
+data BitwiseExpOp
   = LessThanOp
-  | GreaterThanOp
   | LessThanEqOp
+  | GreaterThanOp
   | GreaterThanEqOp
   deriving (Show, Eq)
 
@@ -199,7 +195,7 @@ funDeclP = do
     unsnoc = foldr (\x -> Just . maybe ([], x) (\(~(a, b)) -> (x : a, b))) Nothing
     {-# INLINEABLE unsnoc #-}
     exp0 :: Exp
-    exp0 = Exp (LogicalAndExp (EqualityExp (RelationalExp (AdditiveExp (Term (Const 0) []) []) []) []) []) []
+    exp0 = Exp (LogicalAndExp (EqualityExp (RelationalExp (BitwiseExp (AdditiveExp (Term (Const 0) []) []) []) []) []) []) []
 
 statementP :: Parser Statement
 statementP =
@@ -275,13 +271,24 @@ equalityExpP = EqualityExp <$> relationalExpP <*> go []
         <|> pure (reverse rs)
 
 relationalExpP :: Parser RelationalExp
-relationalExpP = RelationalExp <$> additiveExpP <*> go []
+relationalExpP = RelationalExp <$> bitwiseExpP <*> go []
   where
     go as =
       try
         ( do
-            result <- (,) <$> additiveExpOpP <*> additiveExpP
+            result <- (,) <$> bitwiseExpOpP <*> bitwiseExpP
             go (result : as)
+        )
+        <|> pure (reverse as)
+
+bitwiseExpP :: Parser BitwiseExp
+bitwiseExpP = BitwiseExp <$> additiveExpP <*> go []
+  where
+    go as =
+      try
+        ( do
+          result <- (,) <$> additiveExpOpP <*> additiveExpP
+          go (result : as)
         )
         <|> pure (reverse as)
 
@@ -423,6 +430,13 @@ relationalExpOpP = token test Set.empty
 
 additiveExpOpP :: Parser AdditiveExpOp
 additiveExpOpP = token test Set.empty
+  where
+    test (WithPos _ _ _ BitwiseLeftShift) = Just BitwiseLeftShiftOp
+    test (WithPos _ _ _ BitwiseRightShift) = Just BitwiseRightShiftOp
+    test _ = Nothing
+
+bitwiseExpOpP :: Parser BitwiseExpOp
+bitwiseExpOpP = token test Set.empty
   where
     test (WithPos _ _ _ LessThan) = Just LessThanOp
     test (WithPos _ _ _ GreaterThan) = Just GreaterThanOp

@@ -39,6 +39,8 @@ data Instruction where
   CWD :: Instruction
   CDQ :: Instruction
   CQO :: Instruction
+  SALL :: (Arg a) => Arg8 -> a -> Instruction
+  SARL :: (Arg a) => Arg8 -> a -> Instruction
   NEG :: (Arg a) => a -> Instruction
   NOT :: (Arg a) => a -> Instruction
   CMP :: (Arg a1, Arg a2) => a2 -> a1 -> Instruction
@@ -52,7 +54,7 @@ data Instruction where
   SETG :: Arg8 -> Instruction
   SETGE :: Arg8 -> Instruction
   RET :: Instruction
-  -- labels for compatability with Writer [Instruction]
+  -- labels for compatability with Writer (Endo [Instruction])
   Globl :: Text -> Instruction
   Label :: Text -> Instruction
 
@@ -76,6 +78,8 @@ instance Show Instruction where
         CWD -> ["cwd"]
         CDQ -> ["cdq"]
         CQO -> ["cqo"]
+        SALL arg1 arg2 -> ["sall", show arg1 ++ ",", show arg2]
+        SARL arg1 arg2 -> ["sarl", show arg1 ++ ",", show arg2]
         NEG arg1 -> ["neg", show arg1]
         NOT arg1 -> ["not", show arg1]
         CMP arg1 arg2 -> ["cmp", show arg1 ++ ",", show arg2]
@@ -110,6 +114,7 @@ data Arg64 where
   RAX :: Arg64
   RBX :: Arg64
   RCX :: Arg64
+  RDX :: Arg64
   RSI :: Arg64
   RDI :: Arg64
   RSP :: Arg64
@@ -132,6 +137,7 @@ instance Show Arg64 where
   show RAX = "%rax"
   show RBX = "%rbx"
   show RCX = "%rcx"
+  show RDX = "%rdx"
   show RSI = "%rsi"
   show RDI = "%rdi"
   show RSP = "%rsp"
@@ -209,11 +215,23 @@ data Arg8
   = BYTE Word8
   | AL
   | AH
+  | BL
+  | BH
+  | CL
+  | CH
+  | DL
+  | DH
 
 instance Show Arg8 where
   show (BYTE x) = '$' : show x
   show AL = "%al"
   show AH = "%ah"
+  show BL = "%bl"
+  show BH = "%bh"
+  show CL = "%cl"
+  show CH = "%ch"
+  show DL = "%dl"
+  show DH = "%dh"
 
 instance Arg Arg8
 
@@ -357,20 +375,20 @@ generateEqualityExp (EqualityExp r rs) = do
     )
 
 generateRelationalExp :: RelationalExp -> Generator ()
-generateRelationalExp (RelationalExp a []) = generateAdditiveExp a
+generateRelationalExp (RelationalExp a []) = generateBitwiseExp a
 generateRelationalExp (RelationalExp a as) = do
-  generateAdditiveExp a
+  generateBitwiseExp a
   forM_
     as
-    ( \(aOp, a') -> do
+    ( \(bOp, b') -> do
         tellInstr $ PUSH RAX
-        generateAdditiveExp a'
+        generateBitwiseExp b'
         tellInstrs
           [ POP RCX,
             CMP EAX ECX,
             MOVQ (QWORD 0) RAX
           ]
-        case aOp of
+        case bOp of
           LessThanOp -> do
             tellInstr $ SETL AL
           LessThanEqOp -> do
@@ -379,6 +397,32 @@ generateRelationalExp (RelationalExp a as) = do
             tellInstr $ SETG AL
           GreaterThanEqOp -> do
             tellInstr $ SETGE AL
+    )
+
+generateBitwiseExp :: BitwiseExp -> Generator ()
+generateBitwiseExp (BitwiseExp a []) = generateAdditiveExp a
+generateBitwiseExp (BitwiseExp a as) = do
+  generateAdditiveExp a
+  forM_
+    as
+    ( \(aOp, a') -> do
+        tellInstr $ PUSH RAX
+        generateAdditiveExp a'
+        tellInstrs
+          [ POP RDX,
+            MOVQ RAX RCX
+          ]
+        case aOp of
+          BitwiseLeftShiftOp -> do
+            tellInstrs
+              [ SALL CL EDX,
+                MOVL EDX EAX
+              ]
+          BitwiseRightShiftOp -> do
+            tellInstrs
+              [ SARL CL EDX,
+                MOVL EDX EAX
+              ]
     )
 
 generateAdditiveExp :: AdditiveExp -> Generator ()

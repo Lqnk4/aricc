@@ -46,6 +46,8 @@ data CToken
   | Or
   | Equal
   | NotEqual
+  | BitwiseLeftShift
+  | BitwiseRightShift
   | LessThan
   | LessThanEq
   | GreaterThan
@@ -80,6 +82,8 @@ showCToken = \case
   Or -> "||"
   Equal -> "=="
   NotEqual -> "!="
+  BitwiseLeftShift -> "<<"
+  BitwiseRightShift -> ">>"
   LessThan -> "<"
   LessThanEq -> "<="
   GreaterThan -> ">"
@@ -232,6 +236,8 @@ lex = do
           lexOr,
           lexEqual,
           lexNotEqual,
+          lexBitwiseLeftShift,
+          lexBitwiseRightShift,
           lexLessThanEq,
           lexLessThan,
           lexGreaterThanEq,
@@ -290,12 +296,12 @@ lexIdentifier =
     hexToInt = foldl ((+) . (16 *)) 0 . map Char.digitToInt
     firstChar = letterChar <|> underscore <|> unicodeEscape
 
--- TODO: char as int literal
 lexIntLiteral :: Lexer CToken
 lexIntLiteral = lexeme (IntLiteral <$> choice [hex, oct, bin, dec] <?> "Int Literal")
   where
     hex = try $ char '0' *> char' 'x' *> L.hexadecimal
     oct = try $ char '0' *> char' 'o' *> L.octal
+    -- NOTE: binary literal not part of C standard, usually implemented as compiler extension
     bin = try $ char '0' *> char' 'b' *> L.binary
     dec = try L.decimal
 
@@ -331,6 +337,12 @@ lexEqual = symbol "==" $> Equal
 
 lexNotEqual :: Lexer CToken
 lexNotEqual = symbol "!=" $> NotEqual
+
+lexBitwiseLeftShift :: Lexer CToken
+lexBitwiseLeftShift = symbol "<<" $> BitwiseLeftShift
+
+lexBitwiseRightShift :: Lexer CToken
+lexBitwiseRightShift = symbol ">>" $> BitwiseRightShift
 
 lexLessThan :: Lexer CToken
 lexLessThan = symbol "<" $> LessThan

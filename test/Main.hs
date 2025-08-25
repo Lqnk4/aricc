@@ -47,7 +47,7 @@ compilerTests =
       ExitCodeTest "return_0.c" ExitSuccess,
       ExitCodeTest "return_2.c" (ExitFailure 2),
       -- Week 2
-      ExitCodeTest "bitwise.c" (ExitFailure 243),
+      ExitCodeTest "bitwise_neg.c" (ExitFailure 243),
       ExitCodeTest "bitwise_zero.c" (ExitFailure 255),
       ExitCodeTest "unary_negation.c" (ExitFailure 251),
       ExitCodeTest "logical_negation.c" ExitSuccess,
@@ -86,6 +86,7 @@ compilerTests =
       ExitCodeTest "le_true.c" (ExitFailure 1),
       ExitCodeTest "and_or_precedence.c" (ExitFailure 1),
       ExitCodeTest "eq_or_precedence.c" (ExitFailure 1),
+      ExitCodeTest "bitwise_shift.c" (ExitFailure 33),
       -- Week 5
       ExitCodeTest "assign.c" (ExitFailure 2),
       ExitCodeTest "assign_val.c" ExitSuccess,
