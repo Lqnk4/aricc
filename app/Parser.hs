@@ -7,6 +7,12 @@ module Parser
     Exp (..),
     LogicalAndExp (..),
     LogicalAndExpOp (..),
+    BitwiseOrExp (..),
+    BitwiseOrExpOp (..),
+    BitwiseXorExp (..),
+    BitwiseXorExpOp (..),
+    BitwiseAndExp (..),
+    BitwiseAndExpOp (..),
     EqualityExp (..),
     EqualityExpOp (..),
     RelationalExp (..),
@@ -35,23 +41,6 @@ import Data.Word (Word32)
 import Lexer
 import Text.Megaparsec hiding (State)
 
-{- Week 5
-<program> ::= <function>
-<function> ::= "int" <id> "(" ")" "{" { <statement> } "}"
-<statement> ::= "return" <exp> ";"
-              | <exp> ";"
-              | "int" <id> [ = <exp>] ";"
-<exp> ::= <id> "=" <exp> | <logical-or-exp>
-<logical-or-exp> ::= <logical-and-exp> { "||" <logical-and-exp> }
-<logical-and-exp> ::= <equality-exp> { "&&" <equality-exp> }
-<equality-exp> ::= <relational-exp> { ("!=" | "==") <relational-exp> }
-<relational-exp> ::= <additive-exp> { ("<" | ">" | "<=" | ">=") <additive-exp> }
-<additive-exp> ::= <term> { ("+" | "-") <term> }
-<term> ::= <factor> { ("*" | "/" | "%") <factor> }
-<factor> ::= "(" <exp> ")" | <unary_op> <factor> | <int> | <id>
-<unary_op> ::= "!" | "~" | "-"
--}
-
 newtype ParserState
   = ParserState {psLocalVars :: Set.Set Text}
 
@@ -74,43 +63,39 @@ data Exp
   | Exp LogicalAndExp [(LogicalAndExpOp, LogicalAndExp)]
   deriving (Show, Eq)
 
-data LogicalAndExp = LogicalAndExp EqualityExp [(EqualityExpOp, EqualityExp)]
-  deriving (Show, Eq)
-
-data EqualityExp = EqualityExp RelationalExp [(RelationalExpOp, RelationalExp)]
-  deriving (Show, Eq)
-
-data RelationalExp = RelationalExp BitwiseExp [(BitwiseExpOp, BitwiseExp)]
-  deriving (Show, Eq)
-
-data BitwiseExp = BitwiseExp AdditiveExp [(AdditiveExpOp, AdditiveExp)]
-  deriving (Show, Eq)
-
-data AdditiveExp = AdditiveExp Term [(TermOp, Term)]
-  deriving (Show, Eq)
-
-data Term = Term Factor [(FactorOp, Factor)]
-  deriving (Show, Eq)
-
-data Factor
-  = Parens Exp
-  | UnaryFactor UnaryOp Factor
-  | Const Word32
-  | Var Text
-  deriving (Show, Eq)
-
 data LogicalAndExpOp
   = OrOp
   deriving (Show, Eq)
 
-data UnaryOp
-  = NegationOp
-  | BitwiseComplementOp
-  | LogicalNegationOp
+data LogicalAndExp = LogicalAndExp BitwiseOrExp [(BitwiseOrExpOp, BitwiseOrExp)]
+  deriving (Show, Eq)
+
+data BitwiseOrExpOp
+  = AndOp
+  deriving (Show, Eq)
+
+data BitwiseOrExp = BitwiseOrExp BitwiseXorExp [(BitwiseXorExpOp, BitwiseXorExp)]
+  deriving (Show, Eq)
+
+data BitwiseXorExpOp
+  = BitwiseOrOp
+  deriving (Show, Eq)
+
+data BitwiseXorExp = BitwiseXorExp BitwiseAndExp [(BitwiseAndExpOp, BitwiseAndExp)]
+  deriving (Show, Eq)
+
+data BitwiseAndExpOp
+  = BitwiseXorOp
+  deriving (Show, Eq)
+
+data BitwiseAndExp = BitwiseAndExp EqualityExp [(EqualityExpOp, EqualityExp)]
   deriving (Show, Eq)
 
 data EqualityExpOp
-  = AndOp
+  = BitwiseAndOp
+  deriving (Show, Eq)
+
+data EqualityExp = EqualityExp RelationalExp [(RelationalExpOp, RelationalExp)]
   deriving (Show, Eq)
 
 data RelationalExpOp
@@ -118,9 +103,7 @@ data RelationalExpOp
   | EqualOp
   deriving (Show, Eq)
 
-data AdditiveExpOp
-  = BitwiseLeftShiftOp
-  | BitwiseRightShiftOp
+data RelationalExp = RelationalExp BitwiseExp [(BitwiseExpOp, BitwiseExp)]
   deriving (Show, Eq)
 
 data BitwiseExpOp
@@ -130,15 +113,42 @@ data BitwiseExpOp
   | GreaterThanEqOp
   deriving (Show, Eq)
 
+data BitwiseExp = BitwiseExp AdditiveExp [(AdditiveExpOp, AdditiveExp)]
+  deriving (Show, Eq)
+
+data AdditiveExpOp
+  = BitwiseLeftShiftOp
+  | BitwiseRightShiftOp
+  deriving (Show, Eq)
+
+data AdditiveExp = AdditiveExp Term [(TermOp, Term)]
+  deriving (Show, Eq)
+
 data TermOp
   = AdditionOp
   | SubtractionOp
+  deriving (Show, Eq)
+
+data Term = Term Factor [(FactorOp, Factor)]
   deriving (Show, Eq)
 
 data FactorOp
   = MultiplicationOp
   | DivisionOp
   | ModuloOp
+  deriving (Show, Eq)
+
+data Factor
+  = Parens Exp
+  | UnaryFactor UnaryOp Factor
+  | Const Word32
+  | Var Text
+  deriving (Show, Eq)
+
+data UnaryOp
+  = NegationOp
+  | BitwiseComplementOp
+  | LogicalNegationOp
   deriving (Show, Eq)
 
 -- TODO: use StateT for indent level and just make it look nice
@@ -195,7 +205,7 @@ funDeclP = do
     unsnoc = foldr (\x -> Just . maybe ([], x) (\(~(a, b)) -> (x : a, b))) Nothing
     {-# INLINEABLE unsnoc #-}
     exp0 :: Exp
-    exp0 = Exp (LogicalAndExp (EqualityExp (RelationalExp (BitwiseExp (AdditiveExp (Term (Const 0) []) []) []) []) []) []) []
+    exp0 = Exp (LogicalAndExp (BitwiseOrExp (BitwiseXorExp (BitwiseAndExp (EqualityExp (RelationalExp (BitwiseExp (AdditiveExp (Term (Const 0) []) []) []) []) []) []) []) []) []) []
 
 statementP :: Parser Statement
 statementP =
@@ -249,7 +259,40 @@ expP =
         <|> pure (reverse ls)
 
 logicalAndExpP :: Parser LogicalAndExp
-logicalAndExpP = LogicalAndExp <$> equalityExpP <*> go []
+logicalAndExpP = LogicalAndExp <$> bitwiseOrExpP <*> go []
+  where
+    go es =
+      try
+        ( do
+            result <- (,) <$> bitwiseOrExpOpP <*> bitwiseOrExpP
+            go (result : es)
+        )
+        <|> pure (reverse es)
+
+bitwiseOrExpP :: Parser BitwiseOrExp
+bitwiseOrExpP = BitwiseOrExp <$> bitwiseXorExpP <*> go []
+  where
+    go es =
+      try
+        ( do
+            result <- (,) <$> bitwiseXorExpOpP <*> bitwiseXorExpP
+            go (result : es)
+        )
+        <|> pure (reverse es)
+
+bitwiseXorExpP :: Parser BitwiseXorExp
+bitwiseXorExpP = BitwiseXorExp <$> bitwiseAndExpP <*> go []
+  where
+    go es =
+      try
+        ( do
+            result <- (,) <$> bitwiseAndExpOpP <*> bitwiseAndExpP
+            go (result : es)
+        )
+        <|> pure (reverse es)
+
+bitwiseAndExpP :: Parser BitwiseAndExp
+bitwiseAndExpP = BitwiseAndExp <$> equalityExpP <*> go []
   where
     go es =
       try
@@ -287,12 +330,12 @@ bitwiseExpP = BitwiseExp <$> additiveExpP <*> go []
     go as =
       try
         ( do
-          result <- (,) <$> additiveExpOpP <*> additiveExpP
-          go (result : as)
+            result <- (,) <$> additiveExpOpP <*> additiveExpP
+            go (result : as)
         )
         <|> pure (reverse as)
 
--- TODO: avoid call to reverse in additiveExp and termP termination call
+-- TODO: avoid call to reverse in expression parser termination call
 additiveExpP :: Parser AdditiveExp
 additiveExpP = AdditiveExp <$> termP <*> go []
   where
@@ -415,10 +458,28 @@ logicalAndExpOpP = token test Set.empty
     test (WithPos _ _ _ Or) = Just OrOp
     test _ = Nothing
 
+bitwiseOrExpOpP :: Parser BitwiseOrExpOp
+bitwiseOrExpOpP = token test Set.empty
+  where
+    test (WithPos _ _ _ And) = Just AndOp
+    test _ = Nothing
+
+bitwiseXorExpOpP :: Parser BitwiseXorExpOp
+bitwiseXorExpOpP = token test Set.empty
+  where
+    test (WithPos _ _ _ BitwiseOr) = Just BitwiseOrOp
+    test _ = Nothing
+
+bitwiseAndExpOpP :: Parser BitwiseAndExpOp
+bitwiseAndExpOpP = token test Set.empty
+  where
+    test (WithPos _ _ _ BitwiseXOR) = Just BitwiseXorOp
+    test _ = Nothing
+
 equalityExpOpP :: Parser EqualityExpOp
 equalityExpOpP = token test Set.empty
   where
-    test (WithPos _ _ _ And) = Just AndOp
+    test (WithPos _ _ _ BitwiseAnd) = Just BitwiseAndOp
     test _ = Nothing
 
 relationalExpOpP :: Parser RelationalExpOp

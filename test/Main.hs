@@ -1,3 +1,5 @@
+{-# LANGUAGE BinaryLiterals #-}
+
 import System.Exit (ExitCode (..))
 import System.FilePath
 import System.Process
@@ -87,6 +89,9 @@ compilerTests =
       ExitCodeTest "and_or_precedence.c" (ExitFailure 1),
       ExitCodeTest "eq_or_precedence.c" (ExitFailure 1),
       ExitCodeTest "bitwise_shift.c" (ExitFailure 33),
+      ExitCodeTest "bitwise_and.c" (ExitFailure 0b1000),
+      ExitCodeTest "bitwise_or.c" (ExitFailure 0b1110),
+      ExitCodeTest "bitwise_xor.c" (ExitFailure 0b0110),
       -- Week 5
       ExitCodeTest "assign.c" (ExitFailure 2),
       ExitCodeTest "assign_val.c" ExitSuccess,

@@ -39,11 +39,14 @@ data CToken
   | IntLiteral Word32
   | Minus
   | BitwiseComplement
+  | BitwiseXOR
   | LogicalNegation
   | Addition
   | Multiplication
   | And
+  | BitwiseAnd
   | Or
+  | BitwiseOr
   | Equal
   | NotEqual
   | BitwiseLeftShift
@@ -73,13 +76,16 @@ showCToken = \case
   (IntLiteral n) -> T.pack (show n)
   Minus -> "-"
   BitwiseComplement -> "~"
+  BitwiseXOR -> "^"
   LogicalNegation -> "!"
   Addition -> "+"
   Multiplication -> "*"
   Division -> "/"
   Modulo -> "%"
   And -> "&&"
+  BitwiseAnd -> "&"
   Or -> "||"
+  BitwiseOr -> "|"
   Equal -> "=="
   NotEqual -> "!="
   BitwiseLeftShift -> "<<"
@@ -233,7 +239,9 @@ lex = do
           lexDivision,
           lexModulo,
           lexAnd,
+          lexBitwiseAnd,
           lexOr,
+          lexBitwiseOr,
           lexEqual,
           lexNotEqual,
           lexBitwiseLeftShift,
@@ -243,6 +251,7 @@ lex = do
           lexGreaterThanEq,
           lexGreaterThan,
           lexBitwiseComplement,
+          lexBitwiseXOR,
           lexLogicalNegation,
           lexAssignment
         ]
@@ -311,6 +320,9 @@ lexMinus = symbol "-" $> Minus
 lexBitwiseComplement :: Lexer CToken
 lexBitwiseComplement = symbol "~" $> BitwiseComplement
 
+lexBitwiseXOR :: Lexer CToken
+lexBitwiseXOR = symbol "^" $> BitwiseXOR
+
 lexLogicalNegation :: Lexer CToken
 lexLogicalNegation = symbol "!" $> LogicalNegation
 
@@ -329,8 +341,14 @@ lexModulo = symbol "%" $> Modulo
 lexAnd :: Lexer CToken
 lexAnd = symbol "&&" $> And
 
+lexBitwiseAnd :: Lexer CToken
+lexBitwiseAnd = symbol "&" $> BitwiseAnd
+
 lexOr :: Lexer CToken
 lexOr = symbol "||" $> Or
+
+lexBitwiseOr :: Lexer CToken
+lexBitwiseOr = symbol "|" $> BitwiseOr
 
 lexEqual :: Lexer CToken
 lexEqual = symbol "==" $> Equal

@@ -43,6 +43,9 @@ data Instruction where
   SARL :: (Arg a) => Arg8 -> a -> Instruction
   NEG :: (Arg a) => a -> Instruction
   NOT :: (Arg a) => a -> Instruction
+  OR :: (Arg a1, Arg a2) => a1 -> a2 -> Instruction
+  XOR :: (Arg a1, Arg a2) => a1 -> a2 -> Instruction
+  AND :: (Arg a1, Arg a2) => a1 -> a2 -> Instruction
   CMP :: (Arg a1, Arg a2) => a2 -> a1 -> Instruction
   JMP :: Text -> Instruction
   JE :: Text -> Instruction
@@ -82,6 +85,9 @@ instance Show Instruction where
         SARL arg1 arg2 -> ["sarl", show arg1 ++ ",", show arg2]
         NEG arg1 -> ["neg", show arg1]
         NOT arg1 -> ["not", show arg1]
+        OR arg1 arg2 -> ["or", show arg1 ++ ",", show arg2]
+        XOR arg1 arg2 -> ["xor", show arg1 ++ ",", show arg2]
+        AND arg1 arg2 -> ["and", show arg1 ++ ",", show arg2]
         CMP arg1 arg2 -> ["cmp", show arg1 ++ ",", show arg2]
         JMP label -> ["jmp", show label]
         JE label -> ["je", show label]
@@ -328,9 +334,9 @@ generateExp (Assign name expr) = do
   tellInstr $ MOVQ RAX (OffsetAddr64 varOffset RBP)
 
 generateLogicalAndExp :: LogicalAndExp -> Generator ()
-generateLogicalAndExp (LogicalAndExp e []) = generateEqualityExp e
+generateLogicalAndExp (LogicalAndExp e []) = generateBitwiseOrExp e
 generateLogicalAndExp (LogicalAndExp e es) = do
-  generateEqualityExp e
+  generateBitwiseOrExp e
   forM_
     es
     ( \(eOp, e') -> do
@@ -344,13 +350,58 @@ generateLogicalAndExp (LogicalAndExp e es) = do
                 JMP endLabel,
                 Label clauseLabel
               ]
-            generateEqualityExp e'
+            generateBitwiseOrExp e'
             tellInstrs
               [ CMP (DWORD 0) EAX,
                 MOVQ (QWORD 0) RAX,
                 SETNE AL,
                 Label endLabel
               ]
+    )
+
+generateBitwiseOrExp :: BitwiseOrExp -> Generator ()
+generateBitwiseOrExp (BitwiseOrExp b []) = generateBitwiseXorExp b
+generateBitwiseOrExp (BitwiseOrExp b bs) = do
+  generateBitwiseXorExp b
+  forM_
+    bs
+    ( \(bOp, b') -> do
+      case bOp of
+        BitwiseOrOp -> do
+          tellInstr $ PUSH RAX
+          generateBitwiseXorExp b'
+          tellInstr $ POP RCX
+          tellInstr $ OR RCX RAX
+    )
+
+generateBitwiseXorExp :: BitwiseXorExp -> Generator ()
+generateBitwiseXorExp (BitwiseXorExp b []) = generateBitwiseAndExp b
+generateBitwiseXorExp (BitwiseXorExp b bs) = do
+  generateBitwiseAndExp b
+  forM_
+    bs
+    ( \(bOp, b') -> do
+      case bOp of
+        BitwiseXorOp -> do
+          tellInstr $ PUSH RAX
+          generateBitwiseAndExp b'
+          tellInstr $ POP RCX
+          tellInstr $ XOR RCX RAX
+    )
+
+generateBitwiseAndExp :: BitwiseAndExp -> Generator ()
+generateBitwiseAndExp (BitwiseAndExp e []) = generateEqualityExp e
+generateBitwiseAndExp (BitwiseAndExp e es) = do
+  generateEqualityExp e
+  forM_
+    es
+    ( \(eOp, e') -> do
+      case eOp of
+        BitwiseAndOp -> do
+          tellInstr $ PUSH RAX
+          generateEqualityExp e'
+          tellInstr $ POP RCX
+          tellInstr $ AND RCX RAX
     )
 
 generateEqualityExp :: EqualityExp -> Generator ()
