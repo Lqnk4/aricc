@@ -1,11 +1,10 @@
-{-# LANGUAGE FunctionalDependencies #-}
-
 module Parser
   ( Parser.parse,
     prettyPrintAST,
     Program (..),
     FunDecl (..),
     Statement (..),
+    CExp (..),
     Exp (..),
     LogicalAndExp (..),
     LogicalAndExpOp (..),
@@ -60,9 +59,14 @@ data Statement
   | SExp Exp
   deriving (Show)
 
--- class CExp e e' | e -> e' where
---   lift :: e' -> e
---   {-# MINIMAL (lift) #-}
+-- TODO: Use literally any other implementation
+-- that allows combining expressions and creating literals easily
+-- this is god awful
+class CExp e e' e'op | e -> e', e -> e'op where
+  liftCExp :: e' -> e
+  toExp :: e -> Exp
+  liftConst :: Word32 -> e
+  {-# MINIMAL liftCExp, toExp, liftConst #-}
 
 data Exp
   = Assign Text Exp
@@ -79,8 +83,10 @@ data Exp
   | Exp LogicalAndExp [(LogicalAndExpOp, LogicalAndExp)]
   deriving (Show, Eq)
 
--- instance CExp Exp LogicalAndExp where
---   lift lae = Exp lae []
+instance CExp Exp LogicalAndExp LogicalAndExpOp where
+  liftCExp lae = Exp lae []
+  liftConst = liftCExp . liftConst
+  toExp = id
 
 data LogicalAndExpOp
   = OrOp
@@ -89,12 +95,22 @@ data LogicalAndExpOp
 data LogicalAndExp = LogicalAndExp BitwiseOrExp [(BitwiseOrExpOp, BitwiseOrExp)]
   deriving (Show, Eq)
 
+instance CExp LogicalAndExp BitwiseOrExp BitwiseOrExpOp where
+  liftCExp boe = LogicalAndExp boe []
+  liftConst = liftCExp . liftConst
+  toExp = liftCExp
+
 data BitwiseOrExpOp
   = AndOp
   deriving (Show, Eq)
 
 data BitwiseOrExp = BitwiseOrExp BitwiseXorExp [(BitwiseXorExpOp, BitwiseXorExp)]
   deriving (Show, Eq)
+
+instance CExp BitwiseOrExp BitwiseXorExp BitwiseXorExpOp where
+  liftCExp bxe = BitwiseOrExp bxe []
+  liftConst = liftCExp . liftConst
+  toExp = liftCExp . liftCExp
 
 data BitwiseXorExpOp
   = BitwiseOrOp
@@ -103,12 +119,22 @@ data BitwiseXorExpOp
 data BitwiseXorExp = BitwiseXorExp BitwiseAndExp [(BitwiseAndExpOp, BitwiseAndExp)]
   deriving (Show, Eq)
 
+instance CExp BitwiseXorExp BitwiseAndExp BitwiseAndExpOp where
+  liftCExp bae = BitwiseXorExp bae []
+  liftConst = liftCExp . liftConst
+  toExp = liftCExp . liftCExp . liftCExp
+
 data BitwiseAndExpOp
   = BitwiseXorOp
   deriving (Show, Eq)
 
 data BitwiseAndExp = BitwiseAndExp EqualityExp [(EqualityExpOp, EqualityExp)]
   deriving (Show, Eq)
+
+instance CExp BitwiseAndExp EqualityExp EqualityExpOp where
+  liftCExp bae = BitwiseAndExp bae []
+  liftConst = liftCExp . liftConst
+  toExp = liftCExp . liftCExp . liftCExp . liftCExp
 
 data EqualityExpOp
   = BitwiseAndOp
@@ -117,6 +143,11 @@ data EqualityExpOp
 data EqualityExp = EqualityExp RelationalExp [(RelationalExpOp, RelationalExp)]
   deriving (Show, Eq)
 
+instance CExp EqualityExp RelationalExp RelationalExpOp where
+  liftCExp bae = EqualityExp bae []
+  liftConst = liftCExp . liftConst
+  toExp = liftCExp . liftCExp . liftCExp . liftCExp . liftCExp
+
 data RelationalExpOp
   = NotEqualOp
   | EqualOp
@@ -124,6 +155,11 @@ data RelationalExpOp
 
 data RelationalExp = RelationalExp BitwiseExp [(BitwiseExpOp, BitwiseExp)]
   deriving (Show, Eq)
+
+instance CExp RelationalExp BitwiseExp BitwiseExpOp where
+  liftCExp bae = RelationalExp bae []
+  liftConst = liftCExp . liftConst
+  toExp = liftCExp . liftCExp . liftCExp . liftCExp . liftCExp . liftCExp
 
 data BitwiseExpOp
   = LessThanOp
@@ -135,13 +171,23 @@ data BitwiseExpOp
 data BitwiseExp = BitwiseExp AdditiveExp [(AdditiveExpOp, AdditiveExp)]
   deriving (Show, Eq)
 
+instance CExp BitwiseExp AdditiveExp AdditiveExpOp where
+  liftCExp bae = BitwiseExp bae []
+  liftConst = liftCExp . liftConst
+  toExp = liftCExp . liftCExp . liftCExp . liftCExp . liftCExp . liftCExp . liftCExp
+
 data AdditiveExpOp
-  = BitwiseLeftShiftOp
-  | BitwiseRightShiftOp
+  = BitwiseLShiftOp
+  | BitwiseRShiftOp
   deriving (Show, Eq)
 
 data AdditiveExp = AdditiveExp Term [(TermOp, Term)]
   deriving (Show, Eq)
+
+instance CExp AdditiveExp Term TermOp where
+  liftCExp bae = AdditiveExp bae []
+  liftConst = liftCExp . liftConst
+  toExp = liftCExp . liftCExp . liftCExp . liftCExp . liftCExp . liftCExp . liftCExp . liftCExp
 
 data TermOp
   = AdditionOp
@@ -151,10 +197,15 @@ data TermOp
 data Term = Term Factor [(FactorOp, Factor)]
   deriving (Show, Eq)
 
+instance CExp Term Factor FactorOp where
+  liftCExp bae = Term bae []
+  liftConst = liftCExp . Const
+  toExp = liftCExp . liftCExp . liftCExp . liftCExp . liftCExp . liftCExp . liftCExp . liftCExp . liftCExp
+
 data FactorOp
   = MultiplicationOp
   | DivisionOp
-  | ModuloOp
+  | ModulusOp
   deriving (Show, Eq)
 
 data Factor
@@ -163,6 +214,13 @@ data Factor
   | Const Word32
   | Var Text
   deriving (Show, Eq)
+
+instance CExp Factor Exp Void where
+  liftCExp = Parens
+  liftConst = Const
+  toExp (Parens expr) = expr
+  toExp expr =
+    liftCExp . liftCExp . liftCExp . liftCExp . liftCExp . liftCExp . liftCExp . liftCExp . liftCExp . liftCExp $ expr
 
 data UnaryOp
   = NegationOp
@@ -224,7 +282,7 @@ funDeclP = do
     unsnoc = foldr (\x -> Just . maybe ([], x) (\(~(a, b)) -> (x : a, b))) Nothing
     {-# INLINEABLE unsnoc #-}
     exp0 :: Exp
-    exp0 = Exp (LogicalAndExp (BitwiseOrExp (BitwiseXorExp (BitwiseAndExp (EqualityExp (RelationalExp (BitwiseExp (AdditiveExp (Term (Const 0) []) []) []) []) []) []) []) []) []) []
+    exp0 = liftConst 0
 
 statementP :: Parser Statement
 statementP =
@@ -261,13 +319,10 @@ expP =
     <|> parseAssign bitwiseANDAssignmentP BitwiseANDAssign
     <|> parseAssign bitwiseORAssignmentP BitwiseORAssign
     <|> parseAssign bitwiseXORAssignmentP BitwiseXORAssign
-    <|> ( Exp
-            <$> logicalAndExpP
-            <*> go []
-        )
+    <|> (Exp <$> logicalAndExpP <*> go [])
   where
     parseAssign :: Parser a -> (Text -> Exp -> Exp) -> Parser Exp
-    parseAssign assignmentOpP expConstructor =
+    parseAssign assignmentOpP assignConstructor =
       try
         ( do
             offset <- getOffset
@@ -280,7 +335,7 @@ expP =
                   offset
                   (Just . Label $ ' ' :| "assignment to undeclared variable `" ++ T.unpack identifier ++ "`")
                   Set.empty
-            return $ expConstructor identifier expr
+            return $ assignConstructor identifier expr
         )
     go ls =
       try
@@ -594,8 +649,8 @@ relationalExpOpP = token test Set.empty
 additiveExpOpP :: Parser AdditiveExpOp
 additiveExpOpP = token test Set.empty
   where
-    test (WithPos _ _ _ BitwiseLeftShift) = Just BitwiseLeftShiftOp
-    test (WithPos _ _ _ BitwiseRightShift) = Just BitwiseRightShiftOp
+    test (WithPos _ _ _ BitwiseLeftShift) = Just BitwiseLShiftOp
+    test (WithPos _ _ _ BitwiseRightShift) = Just BitwiseRShiftOp
     test _ = Nothing
 
 bitwiseExpOpP :: Parser BitwiseExpOp
@@ -619,7 +674,7 @@ factorOpP = token test Set.empty
   where
     test (WithPos _ _ _ Multiplication) = Just MultiplicationOp
     test (WithPos _ _ _ Division) = Just DivisionOp
-    test (WithPos _ _ _ Modulo) = Just ModuloOp
+    test (WithPos _ _ _ Modulo) = Just ModulusOp
     test _ = Nothing
 
 beginFileP :: Parser ()

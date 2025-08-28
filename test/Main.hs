@@ -98,5 +98,15 @@ compilerTests =
       ExitCodeTest "exp_return_val.c" ExitSuccess,
       ExitCodeTest "multiple_vars.c" (ExitFailure 3),
       ExitCodeTest "unused_exp.c" ExitSuccess,
-      ExitCodeTest "missing_return.c" ExitSuccess
+      ExitCodeTest "missing_return.c" ExitSuccess,
+      ExitCodeTest "assign_add.c" (ExitFailure 2),
+      ExitCodeTest "assign_subtract.c" (ExitFailure 4),
+      ExitCodeTest "assign_multiply.c" (ExitFailure 12),
+      ExitCodeTest "assign_divide.c" (ExitFailure 15),
+      ExitCodeTest "assign_modulo.c" (ExitFailure 4),
+      ExitCodeTest "assign_lshift.c" (ExitFailure 0b10000),
+      ExitCodeTest "assign_rshift.c" (ExitFailure 0b10),
+      ExitCodeTest "assign_and.c" (ExitFailure 0b0100),
+      ExitCodeTest "assign_or.c" (ExitFailure 0b1101),
+      ExitCodeTest "assign_xor.c" (ExitFailure 0b0101)
     ]

@@ -37,7 +37,8 @@ executable aricc
                       TypeFamilies,
                       RecordWildCards,
                       GADTs,
-                      NamedFieldPuns
+                      NamedFieldPuns,
+                      FunctionalDependencies
 test-suite test-aricc
     import: warnings
     type: exitcode-stdio-1.0

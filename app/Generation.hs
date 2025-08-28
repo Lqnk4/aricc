@@ -332,6 +332,36 @@ generateExp (Assign name expr) = do
   varMap <- gets gsVarMap
   let varOffset = varMap Map.! name
   tellInstr $ MOVQ RAX (OffsetAddr64 varOffset RBP)
+generateExp (AdditionAssign name expr) = do
+  let additiveExp = AdditiveExp (liftCExp $ Var name) [(AdditionOp, liftCExp . liftCExp $ expr)]
+  generateExp (Assign name $ toExp additiveExp)
+generateExp (SubtractionAssign name expr) = do
+  let additiveExp = AdditiveExp (liftCExp $ Var name) [(SubtractionOp, liftCExp . liftCExp $ expr)]
+  generateExp (Assign name $ toExp additiveExp)
+generateExp (MultiplicationAssign name expr) = do
+  let term = Term (Var name) [(MultiplicationOp, liftCExp expr)]
+  generateExp (Assign name $ toExp term)
+generateExp (DivisionAssign name expr) = do
+  let term = Term (Var name) [(DivisionOp, liftCExp expr)]
+  generateExp (Assign name $ toExp term)
+generateExp (ModulusAssign name expr) = do
+  let term = Term (Var name) [(ModulusOp, liftCExp expr)]
+  generateExp (Assign name $ toExp term)
+generateExp (BitwiseLShiftAssign name expr) = do
+  let bitwiseExp = BitwiseExp (liftCExp . liftCExp $ Var name) [(BitwiseLShiftOp, liftCExp . liftCExp . liftCExp $ expr)]
+  generateExp (Assign name $ toExp bitwiseExp)
+generateExp (BitwiseRShiftAssign name expr) = do
+  let bitwiseExp = BitwiseExp (liftCExp . liftCExp $ Var name) [(BitwiseRShiftOp, liftCExp . liftCExp . liftCExp $ expr)]
+  generateExp (Assign name $ toExp bitwiseExp)
+generateExp (BitwiseANDAssign name expr) = do
+  let bitwiseANDExp = BitwiseAndExp (liftCExp . liftCExp . liftCExp . liftCExp . liftCExp $ Var name) [(BitwiseAndOp, liftCExp . liftCExp . liftCExp . liftCExp . liftCExp . liftCExp $ expr)]
+  generateExp (Assign name $ toExp bitwiseANDExp)
+generateExp (BitwiseXORAssign name expr) = do
+  let bitwiseXORExp = BitwiseXorExp (liftCExp . liftCExp . liftCExp . liftCExp . liftCExp . liftCExp $ Var name) [(BitwiseXorOp, liftCExp . liftCExp . liftCExp . liftCExp . liftCExp . liftCExp . liftCExp $ expr)]
+  generateExp (Assign name $ toExp bitwiseXORExp)
+generateExp (BitwiseORAssign name expr) = do
+  let bitwiseORExp = BitwiseOrExp (liftCExp . liftCExp . liftCExp . liftCExp . liftCExp . liftCExp . liftCExp $ Var name) [(BitwiseOrOp, liftCExp . liftCExp . liftCExp . liftCExp . liftCExp . liftCExp . liftCExp . liftCExp $ expr)]
+  generateExp (Assign name $ toExp bitwiseORExp)
 
 generateLogicalAndExp :: LogicalAndExp -> Generator ()
 generateLogicalAndExp (LogicalAndExp e []) = generateBitwiseOrExp e
@@ -366,12 +396,12 @@ generateBitwiseOrExp (BitwiseOrExp b bs) = do
   forM_
     bs
     ( \(bOp, b') -> do
-      case bOp of
-        BitwiseOrOp -> do
-          tellInstr $ PUSH RAX
-          generateBitwiseXorExp b'
-          tellInstr $ POP RCX
-          tellInstr $ OR RCX RAX
+        case bOp of
+          BitwiseOrOp -> do
+            tellInstr $ PUSH RAX
+            generateBitwiseXorExp b'
+            tellInstr $ POP RCX
+            tellInstr $ OR RCX RAX
     )
 
 generateBitwiseXorExp :: BitwiseXorExp -> Generator ()
@@ -381,12 +411,12 @@ generateBitwiseXorExp (BitwiseXorExp b bs) = do
   forM_
     bs
     ( \(bOp, b') -> do
-      case bOp of
-        BitwiseXorOp -> do
-          tellInstr $ PUSH RAX
-          generateBitwiseAndExp b'
-          tellInstr $ POP RCX
-          tellInstr $ XOR RCX RAX
+        case bOp of
+          BitwiseXorOp -> do
+            tellInstr $ PUSH RAX
+            generateBitwiseAndExp b'
+            tellInstr $ POP RCX
+            tellInstr $ XOR RCX RAX
     )
 
 generateBitwiseAndExp :: BitwiseAndExp -> Generator ()
@@ -396,12 +426,12 @@ generateBitwiseAndExp (BitwiseAndExp e es) = do
   forM_
     es
     ( \(eOp, e') -> do
-      case eOp of
-        BitwiseAndOp -> do
-          tellInstr $ PUSH RAX
-          generateEqualityExp e'
-          tellInstr $ POP RCX
-          tellInstr $ AND RCX RAX
+        case eOp of
+          BitwiseAndOp -> do
+            tellInstr $ PUSH RAX
+            generateEqualityExp e'
+            tellInstr $ POP RCX
+            tellInstr $ AND RCX RAX
     )
 
 generateEqualityExp :: EqualityExp -> Generator ()
@@ -464,12 +494,12 @@ generateBitwiseExp (BitwiseExp a as) = do
             MOVQ RAX RCX
           ]
         case aOp of
-          BitwiseLeftShiftOp -> do
+          BitwiseLShiftOp -> do
             tellInstrs
               [ SALL CL EDX,
                 MOVL EDX EAX
               ]
-          BitwiseRightShiftOp -> do
+          BitwiseRShiftOp -> do
             tellInstrs
               [ SARL CL EDX,
                 MOVL EDX EAX
@@ -517,7 +547,7 @@ generateTerm (Term f fs) = do
                 CDQ,
                 IDIVL ECX
               ]
-          ModuloOp -> do
+          ModulusOp -> do
             tellInstrs
               [ MOVL EAX ECX,
                 POP RAX,
