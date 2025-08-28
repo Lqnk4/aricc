@@ -1,3 +1,5 @@
+{-# LANGUAGE FunctionalDependencies #-}
+
 module Parser
   ( Parser.parse,
     prettyPrintAST,
@@ -58,10 +60,27 @@ data Statement
   | SExp Exp
   deriving (Show)
 
+-- class CExp e e' | e -> e' where
+--   lift :: e' -> e
+--   {-# MINIMAL (lift) #-}
+
 data Exp
   = Assign Text Exp
+  | AdditionAssign Text Exp
+  | SubtractionAssign Text Exp
+  | MultiplicationAssign Text Exp
+  | DivisionAssign Text Exp
+  | ModulusAssign Text Exp
+  | BitwiseLShiftAssign Text Exp
+  | BitwiseRShiftAssign Text Exp
+  | BitwiseANDAssign Text Exp
+  | BitwiseORAssign Text Exp
+  | BitwiseXORAssign Text Exp
   | Exp LogicalAndExp [(LogicalAndExpOp, LogicalAndExp)]
   deriving (Show, Eq)
+
+-- instance CExp Exp LogicalAndExp where
+--   lift lae = Exp lae []
 
 data LogicalAndExpOp
   = OrOp
@@ -231,25 +250,38 @@ statementP =
 
 expP :: Parser Exp
 expP =
-  try
-    ( do
-        offset <- getOffset
-        identifier <- identifierP <* assignmentP
-        expr <- expP
-        localVars <- gets psLocalVars
-        unless (Set.member identifier localVars) $ do
-          registerParseError $
-            TrivialError
-              offset
-              (Just . Label $ ' ' :| "assignment to undeclared variable `" ++ T.unpack identifier ++ "`")
-              Set.empty
-        return $ Assign identifier expr
-    )
+  parseAssign assignmentP Assign
+    <|> parseAssign additionAssignmentP AdditionAssign
+    <|> parseAssign subtractionAssignmentP SubtractionAssign
+    <|> parseAssign multiplicationAssignmentP MultiplicationAssign
+    <|> parseAssign divisionAssignmentP DivisionAssign
+    <|> parseAssign modulusAssignmentP ModulusAssign
+    <|> parseAssign bitwiseLShiftAssignmentP BitwiseLShiftAssign
+    <|> parseAssign bitwiseRShiftAssignmentP BitwiseRShiftAssign
+    <|> parseAssign bitwiseANDAssignmentP BitwiseANDAssign
+    <|> parseAssign bitwiseORAssignmentP BitwiseORAssign
+    <|> parseAssign bitwiseXORAssignmentP BitwiseXORAssign
     <|> ( Exp
             <$> logicalAndExpP
             <*> go []
         )
   where
+    parseAssign :: Parser a -> (Text -> Exp -> Exp) -> Parser Exp
+    parseAssign assignmentOpP expConstructor =
+      try
+        ( do
+            offset <- getOffset
+            identifier <- identifierP <* assignmentOpP
+            expr <- expP
+            localVars <- gets psLocalVars
+            unless (Set.member identifier localVars) $ do
+              registerParseError $
+                TrivialError
+                  offset
+                  (Just . Label $ ' ' :| "assignment to undeclared variable `" ++ T.unpack identifier ++ "`")
+                  Set.empty
+            return $ expConstructor identifier expr
+        )
     go ls =
       try
         ( do
@@ -393,6 +425,76 @@ assignmentP = token test Set.empty
   where
     test = \case
       (WithPos {tokenVal = Assignment}) -> Just ()
+      _ -> Nothing
+
+additionAssignmentP :: Parser ()
+additionAssignmentP = token test Set.empty
+  where
+    test = \case
+      (WithPos {tokenVal = AdditionAssignment}) -> Just ()
+      _ -> Nothing
+
+subtractionAssignmentP :: Parser ()
+subtractionAssignmentP = token test Set.empty
+  where
+    test = \case
+      (WithPos _ _ _ SubtractionAssignment) -> Just ()
+      _ -> Nothing
+
+multiplicationAssignmentP :: Parser ()
+multiplicationAssignmentP = token test Set.empty
+  where
+    test = \case
+      (WithPos _ _ _ MultiplicationAssignment) -> Just ()
+      _ -> Nothing
+
+divisionAssignmentP :: Parser ()
+divisionAssignmentP = token test Set.empty
+  where
+    test = \case
+      (WithPos _ _ _ DivisionAssignment) -> Just ()
+      _ -> Nothing
+
+modulusAssignmentP :: Parser ()
+modulusAssignmentP = token test Set.empty
+  where
+    test = \case
+      (WithPos _ _ _ ModulusAssignment) -> Just ()
+      _ -> Nothing
+
+bitwiseLShiftAssignmentP :: Parser ()
+bitwiseLShiftAssignmentP = token test Set.empty
+  where
+    test = \case
+      (WithPos _ _ _ BitwiseLShiftAssignment) -> Just ()
+      _ -> Nothing
+
+bitwiseRShiftAssignmentP :: Parser ()
+bitwiseRShiftAssignmentP = token test Set.empty
+  where
+    test = \case
+      (WithPos _ _ _ BitwiseRShiftAssignment) -> Just ()
+      _ -> Nothing
+
+bitwiseANDAssignmentP :: Parser ()
+bitwiseANDAssignmentP = token test Set.empty
+  where
+    test = \case
+      (WithPos _ _ _ BitwiseANDAssignment) -> Just ()
+      _ -> Nothing
+
+bitwiseORAssignmentP :: Parser ()
+bitwiseORAssignmentP = token test Set.empty
+  where
+    test = \case
+      (WithPos _ _ _ BitwiseORAssignment) -> Just ()
+      _ -> Nothing
+
+bitwiseXORAssignmentP :: Parser ()
+bitwiseXORAssignmentP = token test Set.empty
+  where
+    test = \case
+      (WithPos _ _ _ BitwiseXORAssignment) -> Just ()
       _ -> Nothing
 
 semicolonP :: Parser ()

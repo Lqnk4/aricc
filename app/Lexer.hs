@@ -35,6 +35,16 @@ data CToken
   | CharKeyword
   | ReturnKeyword
   | Assignment
+  | AdditionAssignment
+  | SubtractionAssignment
+  | MultiplicationAssignment
+  | DivisionAssignment
+  | ModulusAssignment
+  | BitwiseLShiftAssignment
+  | BitwiseRShiftAssignment
+  | BitwiseANDAssignment
+  | BitwiseORAssignment
+  | BitwiseXORAssignment
   | Identifier Text
   | IntLiteral Word32
   | Minus
@@ -72,6 +82,16 @@ showCToken = \case
   CharKeyword -> "char"
   ReturnKeyword -> "return"
   Assignment -> "="
+  AdditionAssignment -> "+="
+  SubtractionAssignment -> "-="
+  MultiplicationAssignment -> "*="
+  DivisionAssignment -> "/="
+  ModulusAssignment -> "%="
+  BitwiseLShiftAssignment -> "<<="
+  BitwiseRShiftAssignment -> ">>="
+  BitwiseANDAssignment -> "&="
+  BitwiseORAssignment -> "|="
+  BitwiseXORAssignment -> "^="
   (Identifier name) -> name
   (IntLiteral n) -> T.pack (show n)
   Minus -> "-"
@@ -233,6 +253,16 @@ lex = do
           lexReturnKeyword,
           lexIdentifier,
           lexIntLiteral,
+          lexAdditionAssignment,
+          lexSubtractionAssignment,
+          lexMultiplicationAssignment,
+          lexDivisionAssignment,
+          lexModulusAssignment,
+          lexBitwiseLShiftAssignment,
+          lexBitwiseRShiftAssignment,
+          lexBitwiseANDAssignment,
+          lexBitwiseORAssignment,
+          lexBitwiseXORAssignment,
           lexMinus,
           lexAddition,
           lexMultiplication,
@@ -286,6 +316,36 @@ lexReturnKeyword = keyword "return" $> ReturnKeyword
 
 lexAssignment :: Lexer CToken
 lexAssignment = symbol "=" $> Assignment
+
+lexAdditionAssignment :: Lexer CToken
+lexAdditionAssignment = symbol "+=" $> AdditionAssignment
+
+lexSubtractionAssignment :: Lexer CToken
+lexSubtractionAssignment = symbol "-=" $> SubtractionAssignment
+
+lexMultiplicationAssignment :: Lexer CToken
+lexMultiplicationAssignment = symbol "*=" $> MultiplicationAssignment
+
+lexDivisionAssignment :: Lexer CToken
+lexDivisionAssignment = symbol "/=" $> DivisionAssignment
+
+lexModulusAssignment :: Lexer CToken
+lexModulusAssignment = symbol "%=" $> ModulusAssignment
+
+lexBitwiseLShiftAssignment :: Lexer CToken
+lexBitwiseLShiftAssignment = symbol "<<=" $> BitwiseLShiftAssignment
+
+lexBitwiseRShiftAssignment :: Lexer CToken
+lexBitwiseRShiftAssignment = symbol ">>=" $> BitwiseRShiftAssignment
+
+lexBitwiseANDAssignment :: Lexer CToken
+lexBitwiseANDAssignment = symbol "&=" $> BitwiseANDAssignment
+
+lexBitwiseORAssignment :: Lexer CToken
+lexBitwiseORAssignment = symbol "|=" $> BitwiseORAssignment
+
+lexBitwiseXORAssignment :: Lexer CToken
+lexBitwiseXORAssignment = symbol "^=" $> BitwiseXORAssignment
 
 -- TODO: https://en.cppreference.com/w/c/language/identifiers.html
 lexIdentifier :: Lexer CToken
