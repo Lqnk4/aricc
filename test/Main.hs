@@ -108,5 +108,5 @@ compilerTests =
       ExitCodeTest "assign_rshift.c" (ExitFailure 0b10),
       ExitCodeTest "assign_and.c" (ExitFailure 0b0100),
       ExitCodeTest "assign_or.c" (ExitFailure 0b1101),
-      ExitCodeTest "assign_xor.c" (ExitFailure 0b0101)
+      ExitCodeTest "assign_xor.c" (ExitFailure 0b0110)
     ]
